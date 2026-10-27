@@ -122,17 +122,6 @@
   .warn{background:#451a03; border:1px solid var(--amber); color:#fde68a; border-radius:12px; padding:10px 14px; font-size:13.5px; line-height:1.8; margin-top:12px}
   /* ===== استوديو البرمجة: محرّر + مكتبة ===== */
   .editor-wrap{display:flex; background:#020617; border:1px solid #334155; border-radius:var(--radius); overflow:hidden; direction:ltr}
-  .gutter{
-    padding:12px 6px; margin:0; color:#475569; background:#0b1220; min-width:40px;
-    font-family:ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.6;
-    text-align:right; user-select:none; white-space:pre; overflow:hidden;
-  }
-  #codeEditor{
-    flex:1; width:100%; min-height:260px; background:#020617; color:#d1fae5; border:0; padding:12px;
-    font-family:ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.6; resize:vertical;
-    white-space:pre; overflow:auto; direction:ltr; text-align:left; tab-size:2;
-  }
-  #codeEditor:focus{outline:2px solid var(--blue); outline-offset:-2px}
   .row input[type=text]{flex:1; min-width:150px}
   input[type=text].txt{
     padding:12px; border-radius:12px; border:1px solid #334155; background:#020617;
@@ -194,7 +183,7 @@
     <button id="btnDownloadHubScript" title="تنزيل ملف as3_app.py المحدّث لرفعه إلى الـ Hub عبر Pybricks Code">⬇️ تنزيل as3_app.py</button>
   </div>
 
-  <div class="warn" id="needHubUpdate" hidden>⚠️ <b>كود التدريب داخل الـ Hub أقدم من النسخة الحالية (<span id="oldHubVer">v6</span>)!</b><br>لضمان عمل التسجيل التلقائي الدقيق ومحرك المنفذ D بشكل سليم، اضغط زر <b>«📋 نسخ كود الروبوت المحدّث (as3_app.py v9)»</b> أعلاه، والصقه في <code>code.pybricks.com</code> وشغّله على الـ Hub مرة واحدة فقط.</div>
+  <div class="warn" id="needHubUpdate" hidden>⚠️ <b>كود التدريب داخل الـ Hub أقدم من النسخة الحالية (<span id="oldHubVer">v—</span>)!</b><br>لضمان عمل التسجيل التلقائي الدقيق ومحرك المنفذ D بشكل سليم، اضغط زر <b>«📋 نسخ كود الروبوت المحدّث (as3_app.py v9)»</b> أعلاه، والصقه في <code>code.pybricks.com</code> وشغّله على الـ Hub مرة واحدة فقط.</div>
   <div class="warn" id="needConn">🔒 <b>غير متصل بالروبوت بعد</b> — أي ضغطة الآن لن تصل إلى الـ Hub. اضغط «🔵 اتصال بالبلوتوث» واختر الـ Hub، ثم «▶ تشغيل برنامج التدريب».</div>
   <div class="warn" id="needHttps" hidden></div>
 
@@ -364,6 +353,19 @@ const CMD_STOP_PROGRAM = 0, CMD_START_PROGRAM = 1;
 const EVENT_STATUS = 0, EVENT_WRITE_STDOUT = 1;
 const STATUS_USER_PROGRAM_RUNNING = 6; // رقم البت
 
+// نسخة برنامج الـ Hub المتوقّعة — تطابق HUB_VERSION في as3_app.py
+// (يمنع انحرافها اختبار tests/test_consistency.py).
+const HUB_VERSION_EXPECTED = 9;
+
+// ثوابت الروبوت لتوليد الكود اللحظي — تطابق as3_app.py، ويُتحقّق منها آليًا.
+const HUB_CFG = {
+  wheelDiameter: 56, axleTrack: 110,
+  straightAccel: 1200, turnAccel: 1500,
+  followGain: 2.5, followSide: "L",
+  findSpeed: 80, alignSpeed: 25, followSpeed: 90,
+  defaultThreshold: 30
+};
+
 const $ = id => document.getElementById(id);
 const dot = $("dot"), statusText = $("statusText"), logEl = $("log"), countEl = $("count");
 const trainButtons = [...document.querySelectorAll(".train")];
@@ -392,7 +394,7 @@ function setHubState(alive) {
   el.style.whiteSpace = "nowrap";
   el.title = alive
     ? "برنامج التدريب يعمل ويستقبل أوامر التطبيق"
-    : "لم يرد الـ Hub على فحص الاتصال — تأكد أن as3_app.py (v6) يعمل عليه";
+    : "لم يرد الـ Hub على فحص الاتصال — تأكد أن as3_app.py (v" + HUB_VERSION_EXPECTED + ") يعمل عليه";
 }
 
 // فحص استجابة الـ Hub: يرسل «؟» وينتظر # ✓ HUB_ALIVE.
@@ -401,11 +403,11 @@ async function pingHub(quiet) {
   if (!mode) { setHubState(false); return false; }
   const from = inboxSeq;
   sendCmd("?");
-  const ack = await waitForLine(/# ✓ HUB_ALIVE/, 1500);
+  const ack = await waitForLine(/# ✓ HUB_ALIVE/, 1500, from);
   if (!ack) {
     setHubState(false);
     if (!quiet) {
-      showToast("✗ لا يستجيب الـ Hub — تأكد أن as3_app.py v6 يعمل عليه"
+      showToast("✗ لا يستجيب الـ Hub — تأكد أن as3_app.py v" + HUB_VERSION_EXPECTED + " يعمل عليه"
         + " (اضغط «▶ تشغيل برنامج التدريب») وأن النسخة قديمة لا تعمل الآن", "err", 9000);
     }
     return false;
@@ -430,11 +432,6 @@ function setConnectedUI(on) {
   $("btnSendRun").disabled = !on || sendingProgram;
   $("btnSendOnly").disabled = !on || sendingProgram;
   $("btnStopRun").disabled = !on;
-  // استوديو البرمجة: الإرسال وبرامج الـ Hub تحتاج اتصالًا
-  ["btnEditorSend", "btnEditorSendOnly", "btnHubList", "btnHubSave"].forEach(id => {
-    const el = $(id);
-    if (el) el.disabled = !on;
-  });
   // أزرار التدريب تبقى قابلة للضغط دائمًا؛ إذا لم يكن هناك اتصال تعرض رسالة واضحة في السجل
   trainButtons.forEach(b => b.disabled = false);
   $("needConn").hidden = on;
@@ -467,6 +464,7 @@ let logTrimmed = 0;        // كم سطرًا قُصّ من الأعلى
 const telemetry = [];      // عيّنات # T بطوابع زمنية حقيقية (CSV)
 const bootTime = performance.now();
 const liveCmds = [];       // أوامر المسار المجمّعة لحظيًا في المتصفح لعرض الكود فورًا بلا ضغط على البلوتوث
+let liveLineThreshold = null;  // آخر عتاة خط معروفة (من السجل أو البرنامج أو أمر H)
 
 function buildLiveProgramText() {
   // دمج الحركات المتتالية من نفس النوع (مثل merged_moves في الـ Hub)
@@ -519,17 +517,18 @@ function buildLiveProgramText() {
     header.push("line_sensor = ColorSensor(Port.C)");
   }
   header.push(
-    "robot = DriveBase(left_motor, right_motor, 56, 110)",
+    "robot = DriveBase(left_motor, right_motor, " + HUB_CFG.wheelDiameter + ", " + HUB_CFG.axleTrack + ")",
     "robot.use_gyro(True)",
-    "robot.settings(straight_acceleration=1200, turn_acceleration=1500)",
+    "robot.settings(straight_acceleration=" + HUB_CFG.straightAccel + ", turn_acceleration=" + HUB_CFG.turnAccel + ")",
     "robot.reset()",
   );
   if (needLineHelpers) {
+    const th = (liveLineThreshold === null) ? HUB_CFG.defaultThreshold : liveLineThreshold;
     header.push(
       "",
-      "LINE_THRESHOLD = 45",
+      "LINE_THRESHOLD = " + th,
       "",
-      "def find_line(direction=1, max_dist=250, speed=80):",
+      "def find_line(direction=1, max_dist=250, speed=" + HUB_CFG.findSpeed + "):",
       "    robot.reset()",
       "    robot.drive(direction * speed, 0)",
       "    while abs(robot.distance()) < max_dist:",
@@ -540,13 +539,24 @@ function buildLiveProgramText() {
       "    robot.stop()",
       "    return False",
       "",
-      'def follow_line(dist, side="L", speed=90):',
+      "def align_on_line(speed=" + HUB_CFG.alignSpeed + ", max_angle=45):",
+      "    robot.reset()",
+      "    robot.drive(0, speed)",
+      "    while abs(robot.angle()) < max_angle:",
+      "        if line_sensor.reflection() < LINE_THRESHOLD:",
+      "            robot.stop()",
+      "            return True",
+      "        wait(10)",
+      "    robot.stop()",
+      "    return False",
+      "",
+      'def follow_line(dist, side="' + HUB_CFG.followSide + '", speed=' + HUB_CFG.followSpeed + '):',
       '    sign = 1 if side == "L" else -1',
       "    spd = speed if dist >= 0 else -speed",
       "    robot.reset()",
       "    while abs(robot.distance()) < abs(dist):",
       "        error = line_sensor.reflection() - LINE_THRESHOLD",
-      "        robot.drive(spd, sign * (2.5) * error)",
+      "        robot.drive(spd, sign * (" + HUB_CFG.followGain + ") * error)",
       "        wait(10)",
       "    robot.stop()",
     );
@@ -589,6 +599,8 @@ function snapProgramAngles90(text) {
 function setProgram(text, viaLog) {
   text = snapProgramAngles90(text);
   programText = text;
+  const t = programThreshold(text);
+  if (t !== null) liveLineThreshold = t;
   $("progOut").value = text;
   $("progBadge").textContent = viaLog ? "من السجل (استخراج احتياطي) ✓" : "جاهز (تحديث تلقائي) ✓";
   $("progBadge").hidden = false;
@@ -664,10 +676,10 @@ function appendLog(text) {
       const aliveVer = line.match(/# ✓ HUB_ALIVE v(\d+)/);
       if (aliveVer) hubVersion = aliveVer[1];
     }
-    if (hubVersion && Number(hubVersion) > 0 && Number(hubVersion) < 9) {
+    if (hubVersion && Number(hubVersion) > 0 && Number(hubVersion) < HUB_VERSION_EXPECTED) {
       if ($("oldHubVer")) $("oldHubVer").textContent = "v" + hubVersion;
       if ($("needHubUpdate")) $("needHubUpdate").hidden = false;
-    } else if (hubVersion && Number(hubVersion) >= 9) {
+    } else if (hubVersion && Number(hubVersion) >= HUB_VERSION_EXPECTED) {
       if ($("needHubUpdate")) $("needHubUpdate").hidden = true;
     }
     if (line.indexOf("لا يوجد محرك موصول على المنفذ D") >= 0) {
@@ -688,6 +700,9 @@ function appendLog(text) {
       refreshLiveProgramPreview();
       showToast("🟢 تم تصفير المسار — حرّك الروبوت من مربع START وتوقف 0.6 ثانية عند كل نقطة", "ok", 3500);
     }
+    // عتبة الخط تُرسل من الـ Hub في سطرين — نستخدمها في الكود اللحظي
+    const thLine = line.match(/^#\s*عتاة الخط (?:المقترحة|من التطبيق) = (\d+)/);
+    if (thLine) liveLineThreshold = Number(thLine[1]);
     // عيّنات # T تُحفظ بطابع زمني حقيقي (CSV) بدل الزمن التقديري
     const tel = line.match(/^# T d=(-?[\d.]+) h=(-?[\d.]+) C=([\d.]+)/);
     if (tel) {
@@ -907,7 +922,7 @@ function sendAndShow(ch) {
   // إن كان الـ Hub قد كُشف سابقًا كغير مستجيب، نقول ذلك صريحًا بدل الصمت
   if (hubAlive === false) {
     showToast("⚠ أُرسل «" + (CMD_LABELS[ch] || ch) + "» لكن الـ Hub لا يستجيب —"
-      + " شغّل as3_app.py v6 عليه («▶ تشغيل برنامج التدريب»)", "err", 7000);
+      + " شغّل as3_app.py v" + HUB_VERSION_EXPECTED + " عليه («▶ تشغيل برنامج التدريب»)", "err", 7000);
   } else if (hubAlive === null) {
     setTimeout(() => pingHub(true), 600);          // فحص صامت في الخلفية
   }
@@ -937,7 +952,7 @@ function rcStart(ch, btn) {
   }
   if ((ch === RC.armUp || ch === RC.armDown) && hubVersion && Number(hubVersion) > 0 && Number(hubVersion) < 7) {
     showToast("⚠ كود الـ Hub الحالي (v" + hubVersion + ") قديم ولا يعرف أوامر محرك المنفذ D —"
-      + " اضغط «📋 نسخ كود الروبوت المحدّث (as3_app.py v7)» في الأعلى وارفعه إلى الـ Hub عبر Pybricks Code.", "err", 8000);
+      + " اضغط «📋 نسخ كود الروبوت المحدّث (as3_app.py v" + HUB_VERSION_EXPECTED + ")» في الأعلى وارفعه إلى الـ Hub عبر Pybricks Code.", "err", 8000);
   }
   rcActive = ch;
   rcStartTime = Date.now();
@@ -1138,7 +1153,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) rcStop(true, true);
   else requestWakeLock();     // المتصفح يحرّر القفل عند إخفاء الصفحة
 });
-// ===== نسخ / تنزيل كود التدريب المحدّث (as3_app.py v7) لرفعه إلى الـ Hub =====
+// ===== نسخ / تنزيل كود التدريب المحدّث (as3_app.py v9) لرفعه إلى الـ Hub =====
 async function fetchHubScript() {
   try {
     const res = await fetch("../as3_app.py?v=" + Date.now(), { cache: "no-store" });
@@ -1386,11 +1401,6 @@ function programThreshold(text) {
 function setSendBusy(on) {
   $("btnSendRun").disabled = on || !mode;
   $("btnSendOnly").disabled = on || !mode;
-  // المحرّر يستخدم النقل نفسه: نعطّل أزراره كي لا يتداخل إرسالان
-  ["btnEditorSend", "btnEditorSendOnly"].forEach(id => {
-    const el = $(id);
-    if (el) el.disabled = on || !mode;
-  });
   $("btnSendRun").textContent = on ? "⏳ جارٍ إرسال الكود…" : "📤 إرسال الكود وتشغيله على الروبوت";
 }
 
@@ -1517,7 +1527,7 @@ function checkProgram(text) {
   const src = String(text == null ? "" : text);
   const errors = [], warnings = [], notes = [];
   const empty = { ok: false, errors, warnings, notes, lines: 0, skipped: [], threshold: null };
-  if (!src.trim()) { errors.push("المحرّر فارغ — لا يوجد كود"); return empty; }
+  if (!src.trim()) { errors.push("البرنامج فارغ — لا يوجد كود"); return empty; }
   if (src.indexOf("\t") >= 0) warnings.push("يحتوي علامات جدولة (Tab) — استخدم مسافات");
   for (const issue of scanPython(src)) errors.push(issue);
   const parsed = programToRobotLines(src);
@@ -1549,53 +1559,10 @@ function checkProgram(text) {
   return { ok: errors.length === 0, errors, warnings, notes, lines: lines.length, skipped, threshold };
 }
 
-// ===== مكتبة البرامج: تحويل البيانات (دوال نقية) =====
-const LIB_MAX = 40;
-const PROG_NAME_MAX = 20;   // نفس PROG_NAME_MAX في as3_app.py
-
-function libNormalize(list) {
-  const out = [];
-  if (!Array.isArray(list)) return out;
-  for (const item of list) {
-    if (!item || typeof item !== "object") continue;
-    const name = String(item.name == null ? "" : item.name).trim().slice(0, 40);
-    const code = String(item.code == null ? "" : item.code);
-    if (!name || !code.trim()) continue;
-    out.push({ name, code, updated: Number(item.updated) || 0 });
-    if (out.length >= LIB_MAX) break;
-  }
-  return out;
-}
-// إضافة/تحديث باسم واحد (الاسم نفسه = استبدال) — الأحدث أولًا
-function libUpsert(list, name, code, now) {
-  const clean = libNormalize(list);
-  const nm = String(name == null ? "" : name).trim().slice(0, 40) || "برنامج";
-  const entry = { name: nm, code: String(code == null ? "" : code), updated: Number(now) || 0 };
-  const i = clean.findIndex(x => x.name === nm);
-  if (i >= 0) clean[i] = entry;
-  else clean.unshift(entry);
-  return libNormalize(clean);
-}
-function libRemove(list, name) {
-  return libNormalize(list).filter(x => x.name !== name);
-}
-// قائمة برامج الـ Hub كما يطبعها:  # P <رقم> <عدد الأوامر> <الاسم>
-function parseHubList(lines) {
-  const out = [];
-  for (const raw of (lines || [])) {
-    const m = String(raw).match(/^# P\s+(\d+)\s+(\d+)\s+(.+?)\s*$/);
-    if (m) out.push({ index: Number(m[1]), count: Number(m[2]), name: m[3] });
-  }
-  return out;
-}
-// اسم ملف آمن من اسم عربي
-function pyFileName(name) {
-  const safe = String(name || "program").replace(/[^A-Za-z0-9\u0600-\u06FF_-]+/g, "_").slice(0, 40);
-  return (safe || "program") + ".py";
-}
+// ===== أدوات نصية =====
 const escHtml = str => String(str).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// إرسال نص برنامج (المحرّر أو المكتبة) بدل لوحة البرنامج الجاهز
+// إرسال نص برنامج لوحة «البرنامج الجاهز»
 // يشرح بالضبط لماذا لم نجد أوامر — بدل رسالة عامة لا تدلّ على شيء
 function whyNoCommands(text, parsed) {
   const src = String(text == null ? "" : text);
@@ -1646,11 +1613,20 @@ async function sendProgramToRobot(runIt, text) {
       "err", 11000);
     return;
   }
+  // فحص قبل الإرسال: كان معرَّفًا لكن لا يُستدعى، فكان برنامج ناقص القوس
+  // يُرسل فعلًا. الآن أي خطأ يمنع الإرسال ولا يُعلن نجاحًا كاذبًا.
+  const check = checkProgram(p);
+  if (!check.ok) {
+    showToast("✗ فحص الكود منع الإرسال: " + check.errors.slice(0, 2).join(" — ")
+      + " — لم يُرسل أي شيء", "err", 10000);
+    return;
+  }
   if (sendingProgram) { showToast("⏳ الإرسال جارٍ بالفعل…"); return; }
   sendingProgram = true;
   rcStop(true);
   setSendBusy(true);
   const threshold = programThreshold(p);
+  if (threshold !== null) liveLineThreshold = threshold;
   // نلتقط موضع صندوق الرسائل *قبل* الإرسال: تأكيد الـ Hub قد يصل قبل أن
   // تنتهي كتابة آخر حزمة، فلو انتظرناه بعده فقط لفاتنا وأعلنّا فشلًا كاذبًا.
   const ackFrom = inboxSeq;
@@ -1669,7 +1645,7 @@ async function sendProgramToRobot(runIt, text) {
       const last = [...inbox].reverse().map(x => x.line)
         .find(l => /^#\s*(⚠|✗)/.test(l));
       if (!alive) {
-        showToast("✗ الـ Hub لا يستجيب لأوامر التطبيق — نزّل as3_app.py v6 على الـ Hub"
+        showToast("✗ الـ Hub لا يستجيب لأوامر التطبيق — نزّل as3_app.py v" + HUB_VERSION_EXPECTED + " على الـ Hub"
           + " ثم «▶ تشغيل برنامج التدريب» (النسخة الأقدم لا تعرف الحزم N)", "err", 10000);
       } else {
         showToast("⚠ الـ Hub يعمل لكنه لم يؤكّد استلام الكود"
@@ -1693,7 +1669,8 @@ async function sendProgramToRobot(runIt, text) {
     }
     showToast("📤 أُرسل الكود وتأكّد الـ Hub (" + lines.length + " أمر"
       + (threshold !== null ? "، عتاة الخط " + threshold : "")
-      + (skipped.length ? " — تجاهلت " + skipped.length + " سطرًا" : "") + ")"
+      + (skipped.length ? " — تجاهلت " + skipped.length + " سطرًا" : "")
+      + (check.warnings.length ? " — تنبيه: " + check.warnings.slice(0, 2).join(" · ") : "") + ")"
       + (runIt ? " — التنفيذ يبدأ الآن" : " — اضغط «📤 إرسال الكود وتشغيله» للتنفيذ"),
       "ok", 5000);
   } finally {
@@ -1811,7 +1788,8 @@ const isHttpPlain = location.protocol === "http:" && !isLocalhost;
 const badEnv = !navigator.bluetooth || isFile;
 
 function envHelp() {
-  const here = location.origin + "/app/";
+  const safeOrigin = escHtml(location.origin);
+  const safeHere = escHtml(location.origin + "/app/");
   if (isFile) {
     return "⚠️ فُتحت الصفحة كملف محلي (<code>file://</code>) — البلوتوث لا يعمل من هنا إطلاقًا.<br>"
       + "<b>على الكمبيوتر</b>: شغّل الخادم ثم افتح الرابط:<br>"
@@ -1823,9 +1801,9 @@ function envHelp() {
   if (isHttpPlain) {
     // الحالة الشائعة على الجوال: الصفحة على شبكة محلية عبر http غير آمن
     return "⚠️ الصفحة مفتوحة عبر <code>http://</code> غير الآمن، فحجب المتصفح Web Bluetooth"
-      + " (الرابط الحالي: <code>" + here + "</code>).<br>"
+      + " (الرابط الحالي: <code>" + safeHere + "</code>).<br>"
       + "<b>أندرويد / Chrome</b>: افتح <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code> ←"
-      + " فعّله ← أضف <code>" + location.origin + "</code> في الحقل الذي يظهر ← «Relaunch» ← أعد فتح الرابط.<br>"
+      + " فعّله ← أضف <code>" + safeOrigin + "</code> في الحقل الذي يظهر ← «Relaunch» ← أعد فتح الرابط.<br>"
       + "<b>البديل الدائم</b>: قدّم الصفحة عبر <code>https</code> (مثلًا Cloudflare Tunnel أو GitHub Pages) فلا تحتاج علامة.";
   }
   return "⚠️ متصفحك لا يدعم Web Bluetooth — استخدم <b>Chrome</b> على الكمبيوتر أو أندرويد"

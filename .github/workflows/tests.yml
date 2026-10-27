@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.11"
       - name: فحص الصياغة
-        run: python -m py_compile as3.py as3_app.py tools/check_sync.py tools/dev_server.py
+        run: python -m py_compile as3.py as3_app.py xy_nav.py tools/check_sync.py tools/dev_server.py tools/xy_math.py tools/xy_to_commands.py tools/xy_sim.py tools/xy_calibrate.py
       - name: تزامن as3.py مع as3_app.py
         run: python tools/check_sync.py
       - name: الاختبارات

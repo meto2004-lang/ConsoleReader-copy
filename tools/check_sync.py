@@ -2,13 +2,13 @@
 """فحص تزامن as3.py مع as3_app.py.
 
 النسختان تشتركان في نواة التوليد (تهيئة البرنامج، دوال التصحيح الذكي،
-العتبة، تنسيق المقاطع). أي تعديل في إحداهما يجب أن يصل للأخرى، وإلا فقد
-يعطي `as3.py` برنامجًا مختلفًا عن `as3_app.py` بصمت (حدث فعلًا مع
-`robot.settings`).
+العتبة، تنسيق المقاطع) **وفي ثوابت الروبوت**. أي تعديل في إحداهما يجب أن يصل
+إلى الأخرى، وإلا فقد يعطي `as3.py` برنامجًا مختلفًا عن `as3_app.py` بصمت
+(حدث فعلًا مع `robot.settings`).
 
-هذا السكربت يفشل (exit 1) إذا اختلفت إحدى الدوال المشتركة، ويطبع الفرق.
-الاستثناء الوحيد المقصود هو `print_full_program` (علامات الالتقاط + النص
-الإضافي في نسخة التطبيق).
+هذا السكربت يفشل (exit 1) إذا اختلفت إحدى الدوال أو الثوابت المشتركة،
+أو إذا عُرِّف ثابت مرتين في الملف نفسه. الاستثناء الوحيد المقصود هو
+`print_full_program` (علامات الالتقاط + النص الإضافي في نسخة التطبيق).
 
 التشغيل:  python3 tools/check_sync.py
 """
@@ -32,6 +32,25 @@ SHARED = [
 ]
 EXPECTED_DIFFERENT = {"print_full_program"}
 
+# ثوابت تؤثر على البرنامج المولَّد — انحرافها يغيّر المسار بصمت.
+SHARED_CONSTANTS = [
+    "WHEEL_DIAMETER", "AXLE_TRACK",
+    "MIN_DIST", "MIN_ANG", "MIN_ARM_ANG", "ARM_SPEED",
+    "SEARCH_MARGIN", "MIN_SEARCH", "FOLLOW_GAIN", "ALIGN_SPEED",
+    "FOLLOW_SIDE", "MOVE_ACCEL", "MOVE_TURN_ACCEL",
+]
+
+MAIN_MARKERS = ("# 5) البرنامج الرئيسي", "# 6) البرنامج الرئيسي")
+
+
+def source_before_main(path):
+    """نص الملف قبل الحلقة الرئيسية (لا ثوابت بعدها تُقارَن)."""
+    text = open(path, encoding="utf-8").read()
+    for marker in MAIN_MARKERS:
+        if marker in text:
+            return text[:text.index(marker)]
+    return text
+
 
 def functions(path):
     """كل `def` في المستوى الأعلى مع جسمه فقط.
@@ -40,7 +59,7 @@ def functions(path):
     الملف (فيختلط بالبرنامج الرئيسي ويُعطي فروقًا وهمية). نتوقف عند أول
     سطر في العمود صفر ليس تعليقًا ولا `def` (أي كود التنفيذ الرئيسي).
     """
-    lines = open(path, encoding="utf-8").read().split("\n")
+    lines = source_before_main(path).split("\n")
     found = {}
     i = 0
     while i < len(lines):
@@ -58,16 +77,30 @@ def functions(path):
                 if nxt.startswith("def "):
                     break
                 j += 1
-            found[name] = [l for l in lines[i:j] if l.strip()]
+            found[name] = [line for line in lines[i:j] if line.strip()]
             i = j
         else:
             i += 1
     return found
 
 
+def constants(path):
+    """قيم ثوابت المستوى الأعلى وعدد مرات تعريف كل منها."""
+    values, counts = {}, {}
+    pattern = re.compile(r"^([A-Z][A-Z0-9_]*)\s*=\s*([^#\n]+?)\s*(?:#.*)?$", re.M)
+    for name, value in pattern.findall(source_before_main(path)):
+        counts[name] = counts.get(name, 0) + 1
+        if name not in values:
+            values[name] = value.strip()
+    return values, counts
+
+
 def main():
-    original = functions(os.path.join(ROOT, "as3.py"))
-    app = functions(os.path.join(ROOT, "as3_app.py"))
+    path_a = os.path.join(ROOT, "as3.py")
+    path_b = os.path.join(ROOT, "as3_app.py")
+    original, app = functions(path_a), functions(path_b)
+    const_a, count_a = constants(path_a)
+    const_b, count_b = constants(path_b)
     failures = 0
 
     for name in SHARED:
@@ -84,6 +117,23 @@ def main():
         for line in difflib.unified_diff(a, b, "as3.py", "as3_app.py", lineterm="", n=1):
             print("   " + line)
 
+    for name in SHARED_CONSTANTS:
+        if name not in const_a or name not in const_b:
+            print("✗ الثابت %s غير موجود في الملفين" % name)
+            failures += 1
+            continue
+        if const_a[name] != const_b[name]:
+            print("✗ الثابت %s مختلف: as3.py=%s | as3_app.py=%s"
+                  % (name, const_a[name], const_b[name]))
+            failures += 1
+            continue
+        if count_a[name] != 1 or count_b[name] != 1:
+            print("✗ الثابت %s معرَّف أكثر من مرة (as3.py=%d, as3_app.py=%d)"
+                  % (name, count_a[name], count_b[name]))
+            failures += 1
+            continue
+        print("✓ %s = %s" % (name, const_a[name]))
+
     for name in sorted(EXPECTED_DIFFERENT):
         print("• %s مختلفة عمدًا (علامات الالتقاط/نص التطبيق)" % name)
 
@@ -95,7 +145,7 @@ def main():
     if failures:
         print("\nفشل فحص التزامن: انقل التعديل إلى الملفين معًا.")
         return 1
-    print("\nكل الدوال المشتركة متزامنة ✓")
+    print("\nكل الدوال والثوابت المشتركة متزامنة ✓")
     return 0
 
 

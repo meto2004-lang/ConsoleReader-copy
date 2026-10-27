@@ -1,6 +1,6 @@
 // اختبار دخاني لواجهة التطبيق في DOM محاكى (jsdom).
 //   التشغيل:  npm install jsdom && node tests/ui_smoke.mjs
-// يتخطّى نفسه بهدوء إن لم يكن jsdom مثبَّتًا (CI لا يثبّته)، فلا يعطّل الفحوصات.
+// يتخطّى نفسه بهدوء محليًا إن لم يكن jsdom مثبَّتًا (CI يثبّته ويشغّله).
 let JSDOM, VirtualConsole;
 try {
   ({ JSDOM, VirtualConsole } = await import("jsdom"));
@@ -53,7 +53,7 @@ async function fakeHub({ ackDuringSend, answerPing }) {
         pushInbox("# ✓ استُلم الكود: 2 أمرًا");     // يصل قبل أن ينتهي الإرسال
       }
       if (text === "?" && ${answerPing ? "true" : "false"}) {
-        pushInbox("# ✓ HUB_ALIVE v6 0 20000");
+        pushInbox("# ✓ HUB_ALIVE v9 0 20000");
       }
     } };`);
   w.__written = written;
@@ -67,7 +67,7 @@ check("التأكيد الذي يصل أثناء الإرسال لا يُفقد"
   okToasts.slice(0, 120));
 const sentOrder = w.__written.join(",");
 check("يُرسل G بعد التأكيد", sentOrder.includes("G"), sentOrder.slice(0, 60));
-check("يرسل العتبة H قبل G", /H 40/.test(sentOrder) || !/LINE_THRESHOLD/.test("x") || true);
+check("لا تُرسل عتبة خط إن لم تكن موجودة في البرنامج", !/H \d/.test(sentOrder), sentOrder.slice(0, 60));
 
 await fakeHub({ ackDuringSend: false, answerPing: false });
 await w.eval('sendProgramToRobot(true, "robot.turn(90)\\nrobot.straight(200)\\n")');
@@ -86,6 +86,25 @@ check("أرقام عربية تُرسل كأرقام لاتينية", /أُرس�
   arabicToast.slice(0, 100));
 check("الحمولة المرسلة تحتوي 90 لا ٩٠", w.__written.join("").includes("T 90"),
   w.__written.join("").slice(0, 40));
+w.eval("stopHeartbeat(true); sendingProgram = false; mode = null; cmdChar = null; setHubState(null);");
+
+// فحص الكود قبل الإرسال: قوس ناقص ⇒ لا يُرسل أي شيء ولا يُعلن نجاح
+await fakeHub({ ackDuringSend: true, answerPing: true });
+w.__written.length = 0;
+d.getElementById("toast").textContent = "";
+await w.eval('sendProgramToRobot(true, "robot.turn(90\\nrobot.straight(200)\\n")');
+const badToast = d.getElementById("toast").textContent;
+check("برنامج ناقص القوس يُرفض قبل الإرسال", /فحص الكود منع الإرسال|لم يُغلق/.test(badToast)
+  && !w.__written.join(",").includes("G"), badToast.slice(0, 120));
+w.eval("stopHeartbeat(true); sendingProgram = false; mode = null; cmdChar = null; setHubState(null);");
+
+// عتبة الخط في البرنامج تُرسل إلى الـ Hub قبل G
+await fakeHub({ ackDuringSend: true, answerPing: true });
+w.__written.length = 0;
+await w.eval('sendProgramToRobot(true, "LINE_THRESHOLD = 40\\nrobot.turn(90)\\nrobot.straight(200)\\n")');
+const thOrder = w.__written.join(",");
+check("عتاة الخط تُرسل قبل G", thOrder.includes("H 40") && thOrder.indexOf("H 40") < thOrder.indexOf("G"),
+  thOrder.slice(0, 80));
 w.eval("stopHeartbeat(true); sendingProgram = false; mode = null; cmdChar = null; setHubState(null);");
 
 // شارة استجابة الـ Hub موجودة وتبدأ بحالة «لم يُفحص»

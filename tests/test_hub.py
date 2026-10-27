@@ -337,7 +337,7 @@ class BulkReceiveTests(unittest.TestCase):
 
 
 class ProgramStoreTests(unittest.TestCase):
-    """مكتبة برامج على الـ Hub (v6): W حفظ · V عرض · J تشغيل · D حذف."""
+    """مكتبة برامج على الـ Hub (v9): W حفظ · V عرض · J تشغيل · D حذف."""
 
     FRAME = "T 90\nS 300\nF 1 250\n"
 

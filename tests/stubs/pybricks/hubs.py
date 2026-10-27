@@ -13,6 +13,10 @@ class _Imu:
     def heading(self):
         return self.heading_value
 
+    def reset_heading(self, angle=0):
+        # يستخدمه برنامج المعايرة tools/xy_calibrate.py
+        self.heading_value = angle
+
 
 class _Speaker:
     def __init__(self):

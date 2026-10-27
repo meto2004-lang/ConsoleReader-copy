@@ -19,13 +19,13 @@ function slice(from, to) {
 }
 
 const pure = [
+  slice("const HUB_VERSION_EXPECTED", "const $ ="),
   slice("const progNum", "function setSendBusy"),
   slice("const FRAME_MAX", "async function sendProgramToRobot"),
 ].join("\n");
 const api = new Function(pure + "\nreturn {"
   + " programToRobotLines, programThreshold, buildFrames, FRAME_MAX,"
-  + " checkProgram, scanPython, libNormalize, libUpsert, libRemove,"
-  + " parseHubList, pyFileName, LIB_MAX, PROG_NAME_MAX,"
+  + " checkProgram, scanPython, HUB_CFG, HUB_VERSION_EXPECTED,"
   + " normalizeDigits, whyNoCommands };")();
 
 const PROGRAM = `from pybricks.hubs import PrimeHub
@@ -166,53 +166,38 @@ test("الفحص يحذّر عندما يستخدم الخط بلا LINE_THRESHO
   assert.match(r.warnings.join(" "), /LINE_THRESHOLD/);
 });
 
-test("المكتبة: الاستبدال بالاسم نفسه وإبقاء الأحدث أولًا", () => {
-  let lib = [];
-  lib = api.libUpsert(lib, "أ", "robot.turn(10)", 1);
-  lib = api.libUpsert(lib, "ب", "robot.turn(20)", 2);
-  assert.deepEqual(lib.map(x => x.name), ["ب", "أ"]);
-  lib = api.libUpsert(lib, "أ", "robot.turn(30)", 3);
-  assert.equal(lib.length, 2);
-  assert.equal(lib.find(x => x.name === "أ").code, "robot.turn(30)");
-});
-
-test("المكتبة: تنظيف المدخلات الفاسدة وحدّ أقصى", () => {
-  assert.deepEqual(api.libNormalize("bad"), []);
-  assert.deepEqual(api.libNormalize([null, { name: "", code: "x" }, { name: "ن", code: "  " }]), []);
-  const big = [];
-  for (let i = 0; i < 60; i++) big.push({ name: "p" + i, code: "robot.turn(1)" });
-  assert.equal(api.libNormalize(big).length, api.LIB_MAX);
-  assert.equal(api.libNormalize([{ name: "ن", code: "x", updated: "??" }])[0].updated, 0);
-});
-
-test("المكتبة: الحذف بالاسم", () => {
-  const lib = [{ name: "أ", code: "x" }, { name: "ب", code: "y" }];
-  assert.deepEqual(api.libRemove(lib, "أ").map(x => x.name), ["ب"]);
-  assert.deepEqual(api.libRemove(lib, "غير موجود").map(x => x.name), ["أ", "ب"]);
-});
-
-test("قائمة برامج الـ Hub تُقرأ من سطور V", () => {
-  const out = api.parseHubList([
-    "# V 2",
-    "# P 0 5 خط أول",
-    "# P 1 9 مسار طويل",
-    "# V end",
-    "# إشعار عادي",
-  ]);
-  assert.deepEqual(out, [
-    { index: 0, count: 5, name: "خط أول" },
-    { index: 1, count: 9, name: "مسار طويل" },
-  ]);
-});
-
-test("اسم الملف آمن ويحفظ العربية", () => {
-  assert.equal(api.pyFileName("مسار/سريع"), "مسار_سريع.py");
-  assert.equal(api.pyFileName(""), "program.py");
-  assert.ok(api.pyFileName("a b").indexOf(" ") < 0);
-  assert.equal(api.PROG_NAME_MAX, 20);        // نفس PROG_NAME_MAX في as3_app.py
-});
-
 // ===== حالات كانت تُنتج «لم أجد أوامر قابلة للإرسال» =====
+test("ثوابت الروبوت والإصدار معرّفة في مصدر واحد", () => {
+  assert.equal(api.HUB_VERSION_EXPECTED, 9);
+  assert.equal(api.HUB_CFG.wheelDiameter, 56);
+  assert.equal(api.HUB_CFG.axleTrack, 110);
+  assert.equal(api.HUB_CFG.straightAccel, 1200);
+  assert.equal(api.HUB_CFG.turnAccel, 1500);
+  assert.equal(api.HUB_CFG.followGain, 2.5);
+  assert.equal(api.HUB_CFG.followSide, "L");
+  assert.equal(api.HUB_CFG.alignSpeed, 25);
+  assert.equal(api.HUB_CFG.defaultThreshold, 30);
+});
+
+test("الفحص يقبل برنامج سباق كاملًا (دوال مساعدة + run)", () => {
+  const full = [
+    "from pybricks.robotics import DriveBase",
+    "LINE_THRESHOLD = 48",
+    "def find_line(direction=1, max_dist=250, speed=80):",
+    "    robot.reset()",
+    "    return True",
+    "def run():",
+    "    robot.turn(90)",
+    "    find_line(1, 250)",
+    "    robot.straight(400)",
+    "run()", "",
+  ].join("\n");
+  const r = api.checkProgram(full);
+  assert.equal(r.ok, true, r.errors.join(" | "));
+  assert.equal(r.lines, 3);
+  assert.equal(r.threshold, 48);
+});
+
 test("أرقام عربية/فارسية تُحوَّل إلى لاتينية (لوحة مفاتيح عربية)", () => {
   assert.equal(api.normalizeDigits("robot.turn(٩٠)"), "robot.turn(90)");
   assert.equal(api.normalizeDigits("robot.turn(۹۰)"), "robot.turn(90)");

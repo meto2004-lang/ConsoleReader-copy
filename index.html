@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConsoleReader — جارٍ فتح التطبيق…</title>
+<meta http-equiv="refresh" content="0; url=./app/">
+<style>
+  :root{--bg:#0f172a;--text:#f1f5f9;--muted:#94a3b8;--blue:#3b82f6;--radius:16px}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+       background:var(--bg);color:var(--text);font-family:system-ui,"Segoe UI",Tahoma,Arial,sans-serif;padding:20px}
+  .box{text-align:center;max-width:420px}
+  h1{font-size:22px;margin:0 0 10px}
+  p{color:var(--muted);line-height:1.9;margin:0 0 18px}
+  a{display:inline-block;background:var(--blue);color:#fff;text-decoration:none;
+    padding:13px 22px;border-radius:12px;font-weight:700;font-size:16px}
+  a:hover{filter:brightness(1.1)}
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>🤖 ConsoleReader</h1>
+    <p>جارٍ فتح تطبيق تدريب الروبوت…<br>إن لم يفتح تلقائيًا، اضغط الزر أدناه.</p>
+    <a href="./app/">فتح التطبيق</a>
+  </div>
+  <script>location.replace("./app/");</script>
+</body>
+</html>

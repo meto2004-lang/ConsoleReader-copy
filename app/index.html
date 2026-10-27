@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#0f172a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ConsoleReader">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<title>ConsoleReader — تطبيق تدريب الروبوت</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --card2:#273449; --text:#f1f5f9; --muted:#94a3b8;
+    --blue:#3b82f6; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --violet:#8b5cf6;
+    --radius:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0; font-family:system-ui,"Segoe UI",Tahoma,Arial,sans-serif; background:var(--bg); color:var(--text)}
+  .wrap{max-width:760px; margin:0 auto; padding:16px 14px 40px}
+  header{text-align:center; padding:10px 0 4px}
+  header h1{font-size:24px; margin:0 0 6px}
+  header p{color:var(--muted); margin:0; font-size:14px; line-height:1.7}
+  .status{
+    display:flex; align-items:center; gap:10px; background:var(--card);
+    border-radius:var(--radius); padding:12px 16px; margin:16px 0 12px; font-size:15px;
+  }
+  .dot{width:14px; height:14px; border-radius:50%; background:var(--red); flex:0 0 auto; box-shadow:0 0 10px currentColor}
+  .dot.on{background:var(--green)} .dot.busy{background:var(--amber)}
+  #statusText{flex:1; line-height:1.6}
+  #counter{font-size:13px; color:var(--muted); white-space:nowrap}
+  #counter b{color:var(--text); font-size:18px}
+  .row{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0}
+  button{
+    border:0; border-radius:14px; padding:14px 16px; font-size:16px; font-weight:700;
+    color:#fff; background:var(--card2); cursor:pointer; font-family:inherit; line-height:1.5;
+  }
+  button:active{transform:scale(.97)}
+  button:disabled{opacity:.38; cursor:not-allowed; transform:none}
+  .grow{flex:1}
+  .btn-connect{background:var(--blue)}
+  .btn-start{background:var(--green)}
+  .btn-stop{background:var(--red)}
+  .btn-send{background:var(--violet)}
+  .btn-send-run{background:var(--green)}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:14px 0}
+  /* ===== اللوحة الموحّدة: تحريك الروبوت + أوامر التدريب جنبًا إلى جنب ===== */
+  .dash{display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start}
+  .pane{background:var(--card); border:1px solid #334155; border-radius:var(--radius); padding:14px}
+  .pane .grid{margin:0}
+  .pane .rcpad{max-width:340px; margin:12px auto}
+  .pane-title{font-size:15.5px; font-weight:700; text-align:center; margin:0 0 6px}
+  .pane-title small{font-weight:400; color:var(--muted); font-size:12px}
+  @media (max-width:900px){ .dash{grid-template-columns:1fr} }   /* الجوال: التحريك فوق والأوامر تحت */
+  .train{
+    min-height:110px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+    background:var(--card); border:2px solid #334155; padding:12px 8px;
+  }
+  .train .icon{font-size:32px}
+  .train .name{font-size:17px}
+  .train .hint{font-size:12px; color:var(--muted); font-weight:400}
+  .train.primary{grid-column:1/-1; background:#14532d; border-color:var(--green); min-height:90px}
+  .train.danger{border-color:#7f1d1d}
+  .train:active{border-color:var(--blue)}
+  .train.sent{border-color:var(--green)!important; background:#1c3a2a}
+  /* ===== لوحة التحكم عن بعد ===== */
+  .rcpad{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; max-width:440px; margin:14px auto; direction:ltr}
+  /* الاتجاه LTR عمدًا: الأزرار مفتاح تحكم فيزيائي، فعلى الروبوت يكون
+     «لف يسارًا» على يسار اللوحة مهما كان اتجاه الصفحة */
+  .rc{
+    min-height:88px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+    background:var(--card); border:2px solid #334155; color:var(--text); font-family:inherit;
+    border-radius:14px; padding:10px 6px; cursor:pointer; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none; touch-action:none; -webkit-tap-highlight-color:transparent;
+  }
+  .rc .icon{font-size:34px; line-height:1}
+  .rc .name{font-size:14px; font-weight:700}
+  .rc .key{font-size:11px; color:var(--muted)}
+  .rc:active,.rc.active{border-color:var(--green); background:#1c3a2a; transform:scale(.97)}
+  .rc-stop{grid-column:1/-1; background:#7f1d1d; border-color:var(--red); flex-direction:row; gap:8px; min-height:56px}
+  .rc-stop:active,.rc-stop.active{background:var(--red)}
+  .rc-note{font-size:13px; color:var(--muted); text-align:center; line-height:1.8; margin:4px 0 0}
+  .switch{
+    display:flex; align-items:center; gap:10px; background:var(--card);
+    border:1px solid #334155; border-radius:12px; padding:10px 14px;
+    margin-top:12px; font-size:13.5px; line-height:1.7; cursor:pointer; user-select:none;
+  }
+  .switch input{width:18px; height:18px; accent-color:var(--green); cursor:pointer; flex:0 0 auto}
+  .switch small{color:var(--muted); font-size:12px}
+  h2{font-size:18px; margin:22px 0 8px}
+  /* تنبيه مؤقّت لرسائل التطبيق — لا يُكتب في السجل إطلاقًا */
+  .toast{
+    position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    max-width:min(92vw,600px); background:var(--card2); color:var(--text);
+    border:1px solid var(--blue); border-radius:14px; padding:11px 16px;
+    font-size:14.5px; line-height:1.7; text-align:center; z-index:60;
+    box-shadow:0 10px 34px rgba(0,0,0,.55); direction:rtl;
+  }
+  .toast.ok{border-color:var(--green); background:#12331f}
+  .toast.err{border-color:var(--red); background:#3f1717; color:#fecaca}
+  @keyframes toastIn{from{opacity:0; transform:translate(-50%,10px)} to{opacity:1; transform:translate(-50%,0)}}
+  .toast{animation:toastIn .18s ease-out}
+  #log{
+    background:#020617; border:1px solid #334155; border-radius:var(--radius);
+    padding:12px; height:300px; overflow:auto; font-family:ui-monospace,Consolas,monospace;
+    font-size:12.5px; line-height:1.7; white-space:pre-wrap; word-break:break-word; direction:ltr; text-align:left;
+  }
+  #progOut{
+    width:100%; box-sizing:border-box; background:#020617; color:#d1fae5;
+    border:1px solid #334155; border-radius:var(--radius); padding:12px;
+    font-family:ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.6;
+    min-height:170px; resize:vertical; white-space:pre; overflow:auto;
+    direction:ltr; text-align:left;
+  }
+  #progOut:focus{outline:2px solid var(--green); outline-offset:1px}
+  .badge{display:inline-block; background:#14532d; color:#bbf7d0; border-radius:999px; padding:1px 10px; font-size:12px; margin-inline-start:6px}
+  details{background:var(--card); border-radius:var(--radius); padding:6px 16px; margin-top:18px}
+  summary{cursor:pointer; font-weight:700; padding:10px 0}
+  details ol, details ul{line-height:2; padding-inline-start:22px; margin:6px 0 14px; font-size:14.5px}
+  code{background:#0b1220; padding:1px 6px; border-radius:6px; direction:ltr; display:inline-block; font-size:13px}
+  .warn{background:#451a03; border:1px solid var(--amber); color:#fde68a; border-radius:12px; padding:10px 14px; font-size:13.5px; line-height:1.8; margin-top:12px}
+  /* ===== استوديو البرمجة: محرّر + مكتبة ===== */
+  .editor-wrap{display:flex; background:#020617; border:1px solid #334155; border-radius:var(--radius); overflow:hidden; direction:ltr}
+  .gutter{
+    padding:12px 6px; margin:0; color:#475569; background:#0b1220; min-width:40px;
+    font-family:ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.6;
+    text-align:right; user-select:none; white-space:pre; overflow:hidden;
+  }
+  #codeEditor{
+    flex:1; width:100%; min-height:260px; background:#020617; color:#d1fae5; border:0; padding:12px;
+    font-family:ui-monospace,Consolas,monospace; font-size:12.5px; line-height:1.6; resize:vertical;
+    white-space:pre; overflow:auto; direction:ltr; text-align:left; tab-size:2;
+  }
+  #codeEditor:focus{outline:2px solid var(--blue); outline-offset:-2px}
+  .row input[type=text]{flex:1; min-width:150px}
+  input[type=text].txt{
+    padding:12px; border-radius:12px; border:1px solid #334155; background:#020617;
+    color:var(--text); font-family:inherit; font-size:14.5px;
+  }
+  .liblist{display:flex; flex-direction:column; gap:8px; margin-top:10px; max-height:300px; overflow:auto}
+  .libitem{background:var(--card2); border:1px solid #334155; border-radius:12px; padding:8px 10px}
+  .libitem .meta{display:flex; justify-content:space-between; gap:8px; font-size:12px; color:var(--muted); margin-bottom:6px; flex-wrap:wrap}
+  .libitem .nm{color:var(--text); font-weight:700; font-size:14px; overflow-wrap:anywhere}
+  .libitem .acts{display:flex; gap:6px; flex-wrap:wrap}
+  .libitem button{padding:8px 10px; font-size:13px; border-radius:9px; background:#334155}
+  .libitem button.run{background:#14532d}
+  .libitem button.del{background:#7f1d1d}
+  .libempty{color:var(--muted); font-size:13px; text-align:center; padding:12px; border:1px dashed #334155; border-radius:12px}
+  #codeReport ul{margin:6px 0 0; padding-inline-start:20px; line-height:1.9}
+  #codeReport li{font-size:13px}
+  .rep-ok{border-color:var(--green)!important; background:#12331f!important; color:#bbf7d0!important}
+  .rep-warn{border-color:var(--amber)!important; background:#451a03!important; color:#fde68a!important}
+  .rep-err{border-color:var(--red)!important; background:#3f1717!important; color:#fecaca!important}
+  @media (max-width:420px){ .train .name{font-size:15px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🤖 تطبيق تدريب الروبوت</h1>
+    <p>حرّك الروبوت بيدك، واضغط الأزرار هنا بدلًا من أزرار الـ Hub —<br>نفس وظائف برنامج <code>as3_app.py</code> تمامًا.</p>
+  </header>
+
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="statusText">غير متصل بالروبوت</span>
+    <span id="counter">المسجّل: <b id="count">0</b></span>
+    <span id="hubState" title="هل يرد برنامج التدريب على أوامر التطبيق؟">الـ Hub: —</span>
+  </div>
+  <div class="warn" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center" id="diagBox" hidden>
+    <span>وضع الاتصال: <b id="diagMode">—</b></span>
+    <span>• متصل BLE: <b id="diagConn">لا</b></span>
+    <span>• الاسم: <b id="diagName">—</b></span>
+    <span>• APP_READY ظهر؟ <b id="diagReady">لا</b></span>
+    <span>• علامات البرنامج: <b id="diagMarkers">لا</b></span>
+    <span>• نسخة الـ Hub: <b id="diagVer">—</b></span>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <div class="row">
+    <button class="btn-connect grow" id="btnConnect">🔵 اتصال بالبلوتوث</button>
+    <button id="btnConnectAny" title="إذا لم يظهر الروبوت في القائمة">اتصال بأي جهاز</button>
+    <button id="btnReconnect" hidden>🔁 إعادة الاتصال</button>
+    <button id="btnDisconnect" disabled>قطع الاتصال</button>
+  </div>
+  <div class="row">
+    <button class="btn-start grow" id="btnStart" disabled>▶ تشغيل برنامج التدريب على الروبوت</button>
+    <button class="btn-stop" id="btnStop" disabled>⏹ إيقاف البرنامج</button>
+  </div>
+  <div class="row">
+    <button id="btnCopyHubScript" class="grow" title="انسخ كود as3_app.py المحدّث (v9) والصقه في code.pybricks.com لتفعيل التسجيل التلقائي الدقيق ومحرك المنفذ D">📋 نسخ كود الروبوت المحدّث (as3_app.py v9)</button>
+    <button id="btnDownloadHubScript" title="تنزيل ملف as3_app.py المحدّث لرفعه إلى الـ Hub عبر Pybricks Code">⬇️ تنزيل as3_app.py</button>
+  </div>
+
+  <div class="warn" id="needHubUpdate" hidden>⚠️ <b>كود التدريب داخل الـ Hub أقدم من النسخة الحالية (<span id="oldHubVer">v6</span>)!</b><br>لضمان عمل التسجيل التلقائي الدقيق ومحرك المنفذ D بشكل سليم، اضغط زر <b>«📋 نسخ كود الروبوت المحدّث (as3_app.py v9)»</b> أعلاه، والصقه في <code>code.pybricks.com</code> وشغّله على الـ Hub مرة واحدة فقط.</div>
+  <div class="warn" id="needConn">🔒 <b>غير متصل بالروبوت بعد</b> — أي ضغطة الآن لن تصل إلى الـ Hub. اضغط «🔵 اتصال بالبلوتوث» واختر الـ Hub، ثم «▶ تشغيل برنامج التدريب».</div>
+  <div class="warn" id="needHttps" hidden></div>
+
+  <h2>🎮 التدريب والتحكم عن بعد (مع التسجيل التلقائي الذكي WRO 2026)</h2>
+  <p class="rc-note">طريقة العمل التلقائية: 1) ضع الروبوت في مربع <b>START</b> واضغط <b>«🟢 بدء مسار تلقائي جديد من START»</b> ← 2) حرّك الروبوت بيدك أو بالأسهم وتوقف <b>0.6 ثانية</b> عند كل محطة (ستسمع نغمة قصيرة ويتحدث الكود بالأسفل فورًا) ← 3) عند نهاية المسار اضغط <b>«⏹ إنهاء التسجيل وتثبيت الكود»</b> قبل حمل الروبوت وإرجاعه لبداية البساط.</p>
+
+  <div class="pane" style="margin-bottom:14px">
+    <div class="pane-title">🤖 إعدادات التسجيل التلقائي الذكي بدون أزرار <small id="autoRecBadge" style="color:#86efac">— نشط وجاهز</small></div>
+    <div class="row" style="margin-top:6px;margin-bottom:10px">
+      <button id="btnClearPath" class="grow" style="background:#065f46;border-color:#10b981;color:#ecfdf5;font-weight:700" title="يمسح المسار القديم ويصفّر نقطة القياس في مربع START ويبدأ التسجيل التلقائي (تضيء لمبة الـ Hub بالأخضر)">🟢 بدء مسار تلقائي جديد من START</button>
+      <button id="btnFinishAutoPath" class="grow" style="background:#7c2d12;border-color:#f59e0b;color:#fef3c7;font-weight:700" title="يوقف التسجيل التلقائي ويطبع الكود النهائي حتى تتمكن من حمل الروبوت وإرجاعه إلى START دون تسجيل حركة يدك">⏹ إنهاء التسجيل وتثبيت الكود</button>
+    </div>
+    <label class="switch" for="chkAutoRecord">
+      <input type="checkbox" id="chkAutoRecord" checked>
+      <span>🤖 <b>التسجيل التلقائي للمسار والذراع بدون ضغط أزرار (Auto-Record)</b><br>
+        <small>يسجّل كل حركة (مستقيم / دوران / ذراع D) تلقائيًا بمجرد توقفك لـ 0.6 ثانية (حتى لو كنت تدفعه ببطء)، ويحدّث الكود الجاهز بالأسفل فورًا دون إبطاء البلوتوث.</small></span>
+    </label>
+    <label class="switch" for="chkSnap90" style="margin-top:8px">
+      <input type="checkbox" id="chkSnap90" checked>
+      <span>📐 <b>تثبيت الزوايا القائمة 90° وتجاهل اهتزاز اليد ودحرجة الدوران (WRO 2026)</b><br>
+        <small>يقرب أي دوران قريب من 90° أو 180° (بهامش ±12°) إلى زاوية قائمة دقيقة، ويتجاهل دحرجة العجلات العرضية عند لف الروبوت باليد وانحراف اليد أثناء المشي المستقيم.</small></span>
+    </label>
+    <label class="switch" for="chkAutoLine" style="margin-top:8px">
+      <input type="checkbox" id="chkAutoLine" checked>
+      <span>🎯 <b>الاكتشاف التلقائي للخط الأسود (<code>find_line</code> / <code>follow_line</code>)</b><br>
+        <small>إذا توقفت فوق خط أسود متعامد (<code>T-end</code>) يسجّلها <code>find_line</code> تلقائيًا، وإذا مشيت فوق الخط الأسود لمسافة طويلة يسجّلها <code>follow_line</code> تلقائيًا.</small></span>
+    </label>
+  </div>
+
+  <div class="dash">
+    <section class="pane">
+      <div class="pane-title">🕹️ تحريك الروبوت <small>— اضغط مع الاستمرار أو نقرة سريعة</small></div>
+      <p class="rc-note">الروبوت يتحرك ما دامت إصبعك على الزر، ويتوقف فور رفعه (أو يتحرك نبضة قصيرة عند النقر السريع).<br>كل حركة عن بعد تُغيّر عدّاد المسافة والاتجاه وزاوية الذراع، فـ «تسجيل حركة (R)» يسجّلها تمامًا كالتحريك اليدوي.</p>
+      <div class="rcpad" id="rcPad">
+        <button class="rc" id="rcFwd" style="grid-column:2;grid-row:1" title="اضغط مع الاستمرار">
+          <span class="icon">⬆️</span><span class="name">للأمام</span><span class="key">ArrowUp / W</span>
+        </button>
+        <button class="rc" id="rcLeft" style="grid-column:1;grid-row:2" title="اضغط مع الاستمرار">
+          <span class="icon">↺</span><span class="name">لف يسارًا</span><span class="key">ArrowLeft / A</span>
+        </button>
+        <button class="rc" id="rcRight" style="grid-column:3;grid-row:2" title="اضغط مع الاستمرار">
+          <span class="icon">↻</span><span class="name">لف يمينًا</span><span class="key">ArrowRight / D</span>
+        </button>
+        <button class="rc" id="rcBack" style="grid-column:2;grid-row:3" title="اضغط مع الاستمرار">
+          <span class="icon">⬇️</span><span class="name">للخلف</span><span class="key">ArrowDown / S</span>
+        </button>
+        <button class="rc" id="rcArmDown" style="grid-column:1;grid-row:4" title="تحريك محرك المنفذ D بالاتجاه السالب (اضغط مع الاستمرار أو انقر)">
+          <span class="icon">🔽</span><span class="name">محرك D −</span><span class="key">E / J / -</span>
+        </button>
+        <button class="rc" id="rcArmUp" style="grid-column:3;grid-row:4" title="تحريك محرك المنفذ D بالاتجاه الموجب (اضغط مع الاستمرار أو انقر)">
+          <span class="icon">🔼</span><span class="name">محرك D +</span><span class="key">Q / +</span>
+        </button>
+        <button class="rc rc-stop" id="rcStop" style="grid-row:5">
+          <span class="icon">⏹</span><span class="name">إيقاف فوري + حرر المحركات</span><span class="key">Space</span>
+        </button>
+      </div>
+      <label class="switch" for="chkAutoRead">
+        <input type="checkbox" id="chkAutoRead" checked>
+        <span>📡 <b>قراءة الحسّاس تلقائيًا مع الحركة</b><br>
+          <small>يبثّ الروبوت سطر قياس (<code># T d=… h=… C=…</code>) من حسّاس الألوان الوحيد على المنفذ <b>C</b> أثناء تحرّكه بالأسهم أو باليد — دون الحاجة لزر «قراءة الحساسات».</small></span>
+      </label>
+    </section>
+
+    <section class="pane">
+      <div class="pane-title">📝 أوامر التدريب <small>— بديل أزرار الـ Hub</small></div>
+      <div class="grid" id="trainGrid">
+        <button class="train" data-cmd="R">
+          <span class="icon">➡️</span><span class="name">تسجيل حركة</span>
+          <span class="hint">بديل زر RIGHT — دوران + مستقيم + محرك D (مفتاح R)</span>
+        </button>
+        <button class="train" data-cmd="L">
+          <span class="icon">🎨</span><span class="name">قراءة الحسّاس</span>
+          <span class="hint">بديل زر LEFT — لحساب عتبة الخط (مفتاح L)</span>
+        </button>
+        <button class="train" data-cmd="F">
+          <span class="icon">🎯</span><span class="name">نقطة خط ذكية</span>
+          <span class="hint">بديل CENTER+LEFT — بحث عن الخط + محاذاة (مفتاح F)</span>
+        </button>
+        <button class="train" data-cmd="T">
+          <span class="icon">〰️</span><span class="name">متابعة خط</span>
+          <span class="hint">بديل CENTER+RIGHT — مقطع follow_line (مفتاح T)</span>
+        </button>
+        <button class="train danger" data-cmd="U">
+          <span class="icon">↩️</span><span class="name">تراجع</span>
+          <span class="hint">بديل LEFT+RIGHT — حذف آخر تسجيل (مفتاح U)</span>
+        </button>
+        <button class="train" data-cmd="C">
+          <span class="icon">📋</span><span class="name">عرض الأوامر</span>
+          <span class="hint">بديل CENTER — يطبع كل ما سُجّل حتى الآن (مفتاح C)</span>
+        </button>
+        <button class="train primary" data-cmd="C">
+          <span class="icon">🏁</span><span class="name">طباعة برنامج السباق الكامل</span>
+          <span class="hint">نفس زر الأعلى — يُجهَّز تلقائيًا في لوحة «برنامج جاهز للتشغيل» أسفل الصفحة للتنزيل كملف .py</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <h2>📟 سجل الروبوت</h2>
+  <p class="rc-note">هذا السجل يعرض <b>مخرجات الروبوت فقط</b> — ما يصل عبر البلوتوث من <code>print()</code> والقراءات وبرنامج السباق. رسائل التطبيق والتنبيهات تظهر في شريط منبض مؤقّت أسفل الشاشة ولا تتراكم هنا.</p>
+  <div id="log" dir="ltr"></div>
+  <div class="row">
+    <button class="grow" id="btnCopyLog">📋 نسخ السجل كاملًا</button>
+    <button class="grow" id="btnDownloadLog">⬇️ تنزيل السجل (.txt)</button>
+    <button class="grow" id="btnDownloadCsv">⬇️ تنزيل القياسات (.csv)</button>
+    <button id="btnClearLog">مسح</button>
+  </div>
+
+  <h2>📄 برنامج جاهز للتشغيل على الروبوت <span class="badge" id="progBadge" hidden>جاهز ✓</span></h2>
+  <p class="rc-note">يُملأ تلقائيًا عند وصول البرنامج من الروبوت (زر «🏁 طباعة برنامج السباق الكامل»). يمكنك <b>تعديل سطوره هنا</b> ثم إرساله إلى الروبوت مباشرة.</p>
+  <p class="rc-note" id="progNote" hidden style="color:#fde68a">⚠️ لم تصل علامات الالتقاط من الروبوت، فالبرنامج استُخرج من السجل (نسخة <code>as3_app.py</code> أقدم). الملف صالح للتشغيل، لكن أعد تنزيل <code>as3_app.py</code> المحدَّث على الـ Hub للحصول على الملف الكامل مع ملاحظات المعايرة.</p>
+  <textarea id="progOut" dir="ltr" spellcheck="false"
+    placeholder="لم يصل برنامج بعد — اضغط «🏁 طباعة برنامج السباق الكامل» أعلاه…"></textarea>
+
+  <p class="rc-note" style="margin-top:12px">📤 <b>إرسال الكود إلى الروبوت</b> — يرسل التطبيق أوامر الكود عبر البلوتوث (بدون Pybricks Code
+    وبدون ملفات) ثم ينفّذها الـ Hub أمرًا بعد أمر، ويؤكّد الـ Hub عدد الأوامر التي وصلته قبل أن يبدأ.
+    ما يُرسل هو <b>تسلسل الحركات</b> (دوران/مستقيم/بحث/محاذاة/متابعة) مع <b>عتاة الخط المكتوبة في اللوحة</b>؛
+    أما سرعات التنفيذ ومعامل المتابعة فتبقى من ثوابت <code>as3_app.py</code> على الـ Hub.
+    التنفيذ يمكن إيقافه في أي لحظة بزر «⏹ إيقاف التنفيذ» أو أي زر على الـ Hub،
+    <b>ويتوقف تلقائيًا إذا انقطع الاتصال</b> بالتطبيق (نبضة حياة كل ثانية).</p>
+  <div class="row">
+    <button class="grow btn-send-run" id="btnSendRun" disabled>📤 إرسال الكود وتشغيله على الروبوت</button>
+    <button class="btn-send" id="btnSendOnly" disabled>📥 إرسال فقط</button>
+    <button class="btn-stop" id="btnStopRun" disabled>⏹ إيقاف التنفيذ</button>
+  </div>
+  <div class="row">
+    <button class="grow" id="btnCopyProgram">📋 نسخ البرنامج</button>
+    <button class="grow" id="btnDownloadProgram">⬇️ تنزيل race_program.py</button>
+    <button id="btnClearProgram">تفريغ</button>
+  </div>
+
+  <div class="warn">⚠️ إذا ضغطت أزرار التطبيق ولم يستجب الروبوت: تأكد أن برنامج التدريب يعمل فعلًا (وصلته <b>APP_READY</b> في السجل أو إضاءة الـ Hub زرقاء)، وأن Pybricks Code غير متصل بالـ Hub في نفس الوقت — البلوتوث يقبل اتصالًا واحدًا فقط.</div>
+
+  <details>
+    <summary>📖 طريقة الاستخدام خطوة بخطوة</summary>
+    <ol>
+      <li>افتح برنامج <code>as3_app.py</code> في <b>Pybricks Code</b> وشغّله/نزّله على الـ Hub مرة واحدة على الأقل، ثم <b>افصل Pybricks Code</b> عن الـ Hub.</li>
+      <li>افتح هذه الصفحة في متصفح <b>Chrome</b> (كمبيوتر أو أندرويد)، وشغّل البلوتوث، واضغط «اتصال بالبلوتوث» واختر الـ Hub من القائمة.</li>
+      <li>اضغط «▶ تشغيل برنامج التدريب» (أو شغّل البرنامج من زر الـ Hub نفسه) وانتظر ظهور <code>APP_READY</code> في السجل وإضاءة الـ Hub باللون الأزرق.</li>
+      <li>ادفع الروبوت بيدك إلى النقطة المطلوبة، ثم اضغط زر التطبيق المناسب — ستصدر صفارة من الروبوت وتظهر الحركة المسجلة في السجل، تمامًا كما لو ضغطت أزرار الروبوت.</li>
+      <li>عند الانتهاء اضغط «🏁 طباعة برنامج السباق الكامل»، فيظهر البرنامج في السجل <b>ويُجهَّز تلقائيًا</b> في لوحة «📄 برنامج جاهز للتشغيل».</li>
+      <li>لتشغيله على الروبوت فورًا: عدّل ما تريد في اللوحة ثم اضغط <b>«📤 إرسال الكود وتشغيله على الروبوت»</b> — يبثّ التطبيق أوامر البرنامج في حزم سريعة، ويؤكّد الـ Hub العدد قبل البدء، ثم ينفّذها أمرًا بعد أمر ويظهر التقدّم في السجل. زر «⏹ إيقاف التنفيذ» (أو أي زر على الـ Hub) يوقفه في أي لحظة، وكذلك انقطاع الاتصال.<br>وإن أردت ملفًا مستقلًا: «⬇️ تنزيل race_program.py» ثم افتحه في Pybricks Code واضغط «Download and Run» (أو «📋 نسخ البرنامج» والصقه هناك).</li>
+      <li>تعديل <code>LINE_THRESHOLD</code> في اللوحة يُرسل مع الكود ويُستخدم في التنفيذ المباشر؛ أما سرعات <code>RUN_*</code> و<code>FOLLOW_GAIN</code> فتُعدَّل في <code>as3_app.py</code> على الـ Hub.</li>
+    </ol>
+    <ul>
+      <li>أزرار الروبوت الفعلية ما زالت تعمل أثناء التدريب — يمكنك الخلط بينها وبين التطبيق بحرية.</li>
+      <li>يمكنك أيضًا استخدام لوحة المفاتيح على الكمبيوتر: <code>R</code> <code>L</code> <code>F</code> <code>T</code> <code>U</code> <code>C</code> لأوامر التدريب، وأسهم <code>↑↓←→</code> أو <code>W A S D</code> للتحكم عن بعد. تُقرأ الاختصارات بحسب <b>المفتاح الفيزيائي</b>، فتعمل مع التنسيق العربي أو الإنجليزي دون تغيير أي إعداد.</li>
+      <li>للتحكم عن بعد اضغط مع الاستمرار على أسهم لوحة التحكم (أو الأسهم في لوحة المفاتيح / <code>W A S D</code>)؛ الروبوت يتوقف عند رفع الإصبع، وتوقف تلقائيًا خلال نصف ثانية إذا انقطع الاتصال.</li>
+      <li>لا يعمل Web Bluetooth على آيفون/Safari ولا على Firefox — استخدم Chrome على أندرويد أو الكمبيوتر.</li>
+      <li>يجب فتح الصفحة عبر <code>https</code> أو <code>localhost</code> (مثل GitHub Pages) حتى يسمح المتصفح بالبلوتوث.</li>
+      <li>الشاشة لا تنام أثناء الاتصال (Wake Lock) كي لا تتوقف نبضات التحكم، وإذا انقطع الاتصال يظهر زر «🔁 إعادة الاتصال».</li>
+    </ul>
+  </details>
+</div>
+
+<script>
+"use strict";
+// ===== Pybricks BLE (حسب وثائق Pybricks الرسمية) =====
+const PYBRICKS_SERVICE = "c5f50001-8280-46da-89f4-6d8051e4aeef";
+const PYBRICKS_CMD_EVENT = "c5f50002-8280-46da-89f4-6d8051e4aeef";
+// Nordic UART Service (للبرامج الثابتة الأقدم التي تربط stdin/stdout به)
+const NUS_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const NUS_RX = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // نكتب إليه
+const NUS_TX = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // إشعارات منه
+
+const CMD_STOP_PROGRAM = 0, CMD_START_PROGRAM = 1;
+const EVENT_STATUS = 0, EVENT_WRITE_STDOUT = 1;
+const STATUS_USER_PROGRAM_RUNNING = 6; // رقم البت
+
+const $ = id => document.getElementById(id);
+const dot = $("dot"), statusText = $("statusText"), logEl = $("log"), countEl = $("count");
+const trainButtons = [...document.querySelectorAll(".train")];
+function updateDiag() {
+  const d = $("diagBox"), m=$("diagMode"), c=$("diagConn"), n=$("diagName"), r=$("diagReady"), mk=$("diagMarkers");
+  m.textContent = mode || "—";
+  c.textContent = (device && device.gatt && device.gatt.connected) ? "نعم" : "لا";
+  n.textContent = device && device.name ? device.name : "—";
+  r.textContent = (logEl.textContent.indexOf("APP_READY") >= 0) ? "نعم" : "لا";
+  mk.textContent = sawMarkers ? "نعم" : "لا (نسخة روبوت أقدم)";
+  $("diagVer").textContent = hubVersion ? ("v" + hubVersion) : "—";
+  d.hidden = !mode && !(device && device.gatt && device.gatt.connected);
+}
+
+let device = null, cmdChar = null, nusRx = null, mode = null; // mode: "pybricks" | "nus"
+// هل يرد برنامج التدريب على الـ Hub؟ (null = لم يُفحص بعد)
+let hubAlive = null;
+
+function setHubState(alive) {
+  hubAlive = alive;
+  const el = $("hubState");
+  if (!el) return;
+  el.textContent = alive === null ? "الـ Hub: —" : (alive ? "الـ Hub: يستجيب ✓" : "الـ Hub: لا يستجيب ✗");
+  el.style.color = alive === null ? "var(--muted)" : (alive ? "#86efac" : "#fca5a5");
+  el.style.fontSize = "13px";
+  el.style.whiteSpace = "nowrap";
+  el.title = alive
+    ? "برنامج التدريب يعمل ويستقبل أوامر التطبيق"
+    : "لم يرد الـ Hub على فحص الاتصال — تأكد أن as3_app.py (v6) يعمل عليه";
+}
+
+// فحص استجابة الـ Hub: يرسل «؟» وينتظر # ✓ HUB_ALIVE.
+// هذه أهم حماية من «لا يحدث شيء»: بدونها لا يعرف المستخدم أن الأمر وصل أصلًا.
+async function pingHub(quiet) {
+  if (!mode) { setHubState(false); return false; }
+  const from = inboxSeq;
+  sendCmd("?");
+  const ack = await waitForLine(/# ✓ HUB_ALIVE/, 1500);
+  if (!ack) {
+    setHubState(false);
+    if (!quiet) {
+      showToast("✗ لا يستجيب الـ Hub — تأكد أن as3_app.py v6 يعمل عليه"
+        + " (اضغط «▶ تشغيل برنامج التدريب») وأن النسخة قديمة لا تعمل الآن", "err", 9000);
+    }
+    return false;
+  }
+  setHubState(true);
+  if (!quiet) showToast("✓ الـ Hub يستجيب: " + ack[0].replace(/^#\s*✓\s*/, ""), "ok", 4000);
+  return true;
+}
+let writeChain = Promise.resolve();
+let recorded = 0;
+const decoder = new TextDecoder("utf-8");
+
+function setStatus(text, cls) {
+  statusText.textContent = text;
+  dot.className = "dot" + (cls ? " " + cls : "");
+}
+function setConnectedUI(on) {
+  $("btnDisconnect").disabled = !on;
+  $("btnStart").disabled = !on || mode === "nus";
+  $("btnStop").disabled = !on || mode === "nus";
+  // إرسال الكود وتنفيذه يحتاج اتصالًا قائمًا
+  $("btnSendRun").disabled = !on || sendingProgram;
+  $("btnSendOnly").disabled = !on || sendingProgram;
+  $("btnStopRun").disabled = !on;
+  // استوديو البرمجة: الإرسال وبرامج الـ Hub تحتاج اتصالًا
+  ["btnEditorSend", "btnEditorSendOnly", "btnHubList", "btnHubSave"].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = !on;
+  });
+  // أزرار التدريب تبقى قابلة للضغط دائمًا؛ إذا لم يكن هناك اتصال تعرض رسالة واضحة في السجل
+  trainButtons.forEach(b => b.disabled = false);
+  $("needConn").hidden = on;
+}
+// تنبيه مؤقّت لرسائل التطبيق (المفاتيح، الأخطاء، معلومات الاتصال).
+// لا يُكتب شيء من هنا في السجل — السجل لبيانات الروبوت فقط.
+let toastTimer = null;
+function showToast(msg, kind, ms) {
+  const t = $("toast");
+  t.className = "toast" + (kind ? " " + kind : "");
+  t.textContent = msg;
+  t.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; toastTimer = null; },
+    ms || (kind === "err" ? 5000 : 2200));
+}
+// السجل: بيانات صادرة من الروبوت فقط (WRITE_STDOUT / NUS TX)
+// الأسطر قد تصل مقسّمة على عدة حزم بلوتوث، لذا نجمعها حتى يكتمل السطر.
+let pendingLine = "";
+let progBuf = null;        // أسطر البرنامج أثناء الالتقاط بين علامتي #@@PROGRAM_*@@
+let programText = "";      // آخر برنامج كامل جاهز للتنزيل/النسخ
+let sawMarkers = false;    // هل وصلت علامات الالتقاط من الروبوت؟ (نسخة محدَّثة)
+let sendingProgram = false; // هل يجري إرسال الكود إلى الروبوت الآن؟
+let hubVersion = "";       // نسخة as3_app.py على الـ Hub (من سطر HUB_VERSION)
+// سقف السجل: بدونه ينمو النص بلا حدّ (‏~27KB/دقيقة في البثّ) وتتجمّد
+// الواجهة على الجوال بعد ربع ساعة. التصدير ينبّه إن كان السجل مقصوصًا.
+const LOG_MAX_LINES = 3000;
+let logLines = 0;          // عدد الأسطر المعروضة الآن
+let logTrimmed = 0;        // كم سطرًا قُصّ من الأعلى
+const telemetry = [];      // عيّنات # T بطوابع زمنية حقيقية (CSV)
+const bootTime = performance.now();
+const liveCmds = [];       // أوامر المسار المجمّعة لحظيًا في المتصفح لعرض الكود فورًا بلا ضغط على البلوتوث
+
+function buildLiveProgramText() {
+  // دمج الحركات المتتالية من نفس النوع (مثل merged_moves في الـ Hub)
+  const merged = [];
+  for (const raw of liveCmds) {
+    let m;
+    if ((m = raw.match(/^robot\.turn\((-?\d+)\)$/))) {
+      const v = parseInt(m[1], 10);
+      if (merged.length && merged[merged.length - 1].kind === "turn") merged[merged.length - 1].val += v;
+      else merged.push({ kind: "turn", val: v });
+    } else if ((m = raw.match(/^robot\.straight\((-?\d+)\)$/))) {
+      const v = parseInt(m[1], 10);
+      if (merged.length && merged[merged.length - 1].kind === "straight") merged[merged.length - 1].val += v;
+      else merged.push({ kind: "straight", val: v });
+    } else if ((m = raw.match(/^arm_motor\.run_angle\((\d+),\s*(-?\d+)\)$/))) {
+      const spd = parseInt(m[1], 10), v = parseInt(m[2], 10);
+      if (merged.length && merged[merged.length - 1].kind === "arm") merged[merged.length - 1].val += v;
+      else merged.push({ kind: "arm", spd, val: v });
+    } else {
+      merged.push({ kind: "other", text: raw });
+    }
+  }
+  const bodyLines = [];
+  let needLineHelpers = false;
+  for (const seg of merged) {
+    if (seg.kind === "turn" && seg.val !== 0) bodyLines.push("    robot.turn(" + seg.val + ")");
+    else if (seg.kind === "straight" && seg.val !== 0) bodyLines.push("    robot.straight(" + seg.val + ")");
+    else if (seg.kind === "arm" && seg.val !== 0) bodyLines.push("    arm_motor.run_angle(" + seg.spd + ", " + seg.val + ")");
+    else if (seg.kind === "other") {
+      bodyLines.push("    " + seg.text);
+      if (/^(find_line|follow_line|align_on_line)\(/.test(seg.text)) needLineHelpers = true;
+    }
+  }
+  const header = [
+    "# ==================================================",
+    "# برنامج السباق الذكي (" + liveCmds.length + " أمر مسجّل — تحديث تلقائي لحظي)",
+    "# ==================================================",
+    "from pybricks.hubs import PrimeHub",
+    "from pybricks.pupdevices import Motor, ColorSensor",
+    "from pybricks.parameters import Port, Direction",
+    "from pybricks.robotics import DriveBase",
+    "from pybricks.tools import wait",
+    "",
+    "hub = PrimeHub()",
+    "left_motor  = Motor(Port.A, Direction.COUNTERCLOCKWISE)",
+    "right_motor = Motor(Port.B)",
+    "arm_motor   = Motor(Port.D)  # محرك الذراع / المهام على المنفذ D",
+  ];
+  if (needLineHelpers) {
+    header.push("line_sensor = ColorSensor(Port.C)");
+  }
+  header.push(
+    "robot = DriveBase(left_motor, right_motor, 56, 110)",
+    "robot.use_gyro(True)",
+    "robot.settings(straight_acceleration=1200, turn_acceleration=1500)",
+    "robot.reset()",
+  );
+  if (needLineHelpers) {
+    header.push(
+      "",
+      "LINE_THRESHOLD = 45",
+      "",
+      "def find_line(direction=1, max_dist=250, speed=80):",
+      "    robot.reset()",
+      "    robot.drive(direction * speed, 0)",
+      "    while abs(robot.distance()) < max_dist:",
+      "        if line_sensor.reflection() < LINE_THRESHOLD:",
+      "            robot.stop()",
+      "            return True",
+      "        wait(10)",
+      "    robot.stop()",
+      "    return False",
+      "",
+      'def follow_line(dist, side="L", speed=90):',
+      '    sign = 1 if side == "L" else -1',
+      "    spd = speed if dist >= 0 else -speed",
+      "    robot.reset()",
+      "    while abs(robot.distance()) < abs(dist):",
+      "        error = line_sensor.reflection() - LINE_THRESHOLD",
+      "        robot.drive(spd, sign * (2.5) * error)",
+      "        wait(10)",
+      "    robot.stop()",
+    );
+  }
+  header.push(
+    "",
+    "def run():",
+    ...(bodyLines.length ? bodyLines : ["    pass"]),
+    "",
+    "run()",
+    "# --- نهاية المسار ---",
+    ""
+  );
+  return snapProgramAngles90(header.join("\n"));
+}
+function refreshLiveProgramPreview() {
+  if (!allowFill) return;
+  const p = buildLiveProgramText();
+  programText = p;
+  $("progOut").value = p;
+  $("progBadge").textContent = "تحديث تلقائي لحظي (" + liveCmds.length + " أمر) ✓";
+  $("progBadge").hidden = false;
+  $("progNote").hidden = true;
+}
+
+// يضع البرنامج في اللوحة ويحدّث الحالة
+function snapProgramAngles90(text) {
+  const chk = $("chkSnap90");
+  if (!chk || !chk.checked) return text;
+  return text.replace(/^(\s*robot\.turn\(\s*)(-?\d+)(\s*\))/gm, (full, pre, numStr, post) => {
+    const deg = parseInt(numStr, 10);
+    if (!Number.isFinite(deg) || deg === 0) return full;
+    const nearest90 = Math.round(deg / 90) * 90;
+    if (nearest90 !== 0 && Math.abs(deg - nearest90) <= 10) {
+      return pre + String(nearest90) + post;
+    }
+    return full;
+  });
+}
+function setProgram(text, viaLog) {
+  text = snapProgramAngles90(text);
+  programText = text;
+  $("progOut").value = text;
+  $("progBadge").textContent = viaLog ? "من السجل (استخراج احتياطي) ✓" : "جاهز (تحديث تلقائي) ✓";
+  $("progBadge").hidden = false;
+  $("progNote").hidden = !viaLog;
+  if (viaLog) showToast("📄 البرنامج جاهز (استُخرج من السجل — أعد تنزيل as3_app.py للنسخة الكاملة)", "", 6000);
+  else showToast("📄 تم تحديث برنامج السباق الجاهز تلقائيًا ✓", "ok", 3000);
+}
+// استخراج احتياطي من السجل: يعمل مع نسخة الروبوت القديمة (بلا علامات)
+function logProgram() {
+  const t = logEl.textContent;
+  const s = t.lastIndexOf("# برنامج السباق الذكي");
+  const e = t.lastIndexOf("# --- نهاية المسار ---");
+  if (s === -1 || e === -1 || e < s) return "";
+  const eq = t.lastIndexOf("# =", s);
+  const prog = t.slice(eq === -1 ? s : eq, e).replace(/\s+$/, "") + "\n";
+  return prog.indexOf("from pybricks") < 0 ? "" : prog;   // البرنامج لم يكتمل بعد
+}
+let allowFill = true;   // يمنع إعادة الملء بعد أن يفرّغ المستخدم اللوحة يدويًا
+function fillFromLog() {
+  const p = logProgram();
+  if (!p) return false;
+  if (allowFill && p !== programText) setProgram(p, true);
+  return true;
+}
+
+function appendLog(text) {
+  pendingLine += text;
+  const parts = pendingLine.split("\n");
+  pendingLine = parts.pop();          // آخر جزء لم يكتمل بعد
+
+  let shown = "";
+  for (const line of parts) {
+    // علامات البرنامج الآلية — لا تظهر في السجل ولا تُنسخ
+    if (line.indexOf("#@@PROGRAM_BEGIN@@") >= 0) { sawMarkers = true; progBuf = []; continue; }
+    if (line.indexOf("#@@PROGRAM_END@@") >= 0) {
+      if (progBuf) {
+        const p = progBuf.join("\n").replace(/^\s*\n+/, "").replace(/\s+$/, "") + "\n";
+        progBuf = null;
+        // طباعة ناقصة (نفدت ذاكرة الهاب في منتصف الإخراج): لا نعرض نصًا ناقصًا كأنه سليمًا
+        if (p.indexOf("# --- نهاية المسار ---") < 0) {
+          programText = "";
+          $("progOut").value = "";
+          $("progBadge").textContent = "⚠ فشلت الطباعة (نفدت الذاكرة)";
+          $("progBadge").hidden = false;
+          $("progNote").hidden = true;
+          showToast("⚠️ لم يكتمل البرنامج (نفدت ذاكرة الهاب) — احذف بعض التسجيلات (U) ثم أعد الطباعة (C)", "err", 7000);
+          continue;
+        }
+        setProgram(p, false);
+      }
+      continue;
+    }
+    if (progBuf) progBuf.push(line);
+    shown += line + "\n";
+    pushInbox(line);
+
+    // إشعارات تنفيذ الكود المُرسَل إلى الروبوت (بلا تكرار في السجل)
+    if (line.indexOf("# ▶ بدء تنفيذ الكود") >= 0)
+      showToast("▶ الروبوت ينفّذ الكود الآن — «⏹ إيقاف التنفيذ» لإيقافه", "", 5000);
+    else if (line.indexOf("# ✓ انتهى تنفيذ الكود") >= 0) {
+      stopHeartbeat();
+      showToast("✅ انتهى تنفيذ الكود على الروبوت", "ok", 5000);
+    } else if (line.indexOf("# ⏹ أُلغي تنفيذ") >= 0) {
+      stopHeartbeat();
+      showToast(line.replace(/^#\s*/, ""), "", 5000);
+    }
+    else if (line.indexOf("# ✓ استُلم الكود") >= 0)
+      showToast("📥 " + line.replace(/^#\s*/, ""), "ok", 3500);
+    if (line.indexOf("# برنامج السباق الذكي") >= 0) allowFill = true;   // برنامج جديد مطبوع
+    if (line.indexOf("# HUB_VERSION") === 0) {
+      hubVersion = line.replace("# HUB_VERSION", "").trim();
+    } else {
+      const aliveVer = line.match(/# ✓ HUB_ALIVE v(\d+)/);
+      if (aliveVer) hubVersion = aliveVer[1];
+    }
+    if (hubVersion && Number(hubVersion) > 0 && Number(hubVersion) < 9) {
+      if ($("oldHubVer")) $("oldHubVer").textContent = "v" + hubVersion;
+      if ($("needHubUpdate")) $("needHubUpdate").hidden = false;
+    } else if (hubVersion && Number(hubVersion) >= 9) {
+      if ($("needHubUpdate")) $("needHubUpdate").hidden = true;
+    }
+    if (line.indexOf("لا يوجد محرك موصول على المنفذ D") >= 0) {
+      showToast(line.replace(/^#\s*/, ""), "err", 7000);
+    }
+    if (line.indexOf("# ✨ تسجيل تلقائي:") === 0) {
+      if ($("autoRecBadge")) {
+        $("autoRecBadge").textContent = "— ✅ تم حفظ النقطة تلقائيًا!";
+        $("autoRecBadge").style.color = "#86efac";
+      }
+      showToast("✨ تم حفظ الحركة تلقائيًا وتحديث الكود", "ok", 2200);
+    }
+    if (line.indexOf("# 🗑️ تم مسح المسار") === 0) {
+      recorded = 0;
+      liveCmds.length = 0;
+      allowFill = true;
+      countEl.textContent = "0";
+      refreshLiveProgramPreview();
+      showToast("🟢 تم تصفير المسار — حرّك الروبوت من مربع START وتوقف 0.6 ثانية عند كل نقطة", "ok", 3500);
+    }
+    // عيّنات # T تُحفظ بطابع زمني حقيقي (CSV) بدل الزمن التقديري
+    const tel = line.match(/^# T d=(-?[\d.]+) h=(-?[\d.]+) C=([\d.]+)/);
+    if (tel) {
+      telemetry.push({
+        t: ((performance.now() - bootTime) / 1000).toFixed(1),
+        d: tel[1], h: tel[2], C: tel[3]
+      });
+      if (telemetry.length > 20000) telemetry.shift();
+      onTelemetryAutoRecord(Number(tel[1]), Number(tel[2]), Number(tel[3]));
+    }
+
+    // عدّاد الأوامر المسجّلة وتحديث الكود اللحظي: أسطر الحركة غير المزاحة فقط (خارج #@@PROGRAM_BEGIN@@)
+    if (!progBuf
+        && /^(robot\.|arm_motor\.|find_line\(|align_on_line\(|follow_line\()/.test(line)
+        && !/^robot\.(reset|use_gyro|settings)\(/.test(line)) {
+      recorded++;
+      liveCmds.push(line.trim());
+      refreshLiveProgramPreview();
+    }
+    // التراجع: الروبوت يطبع سطر "# حذف: …" لكل مقطع حُذف → نقصان واحد لكل سطر
+    if (!progBuf && /^#\s*(حذف|delete):/.test(line)) {
+      recorded = Math.max(0, recorded - 1);
+      if (liveCmds.length) liveCmds.pop();
+      refreshLiveProgramPreview();
+    }
+  }
+  if (!shown) { countEl.textContent = recorded; return; }
+
+  countEl.textContent = recorded;
+  appendToLog(shown);
+  if (shown.includes("APP_READY")) setStatus("متصل — برنامج التدريب يعمل والروبوت جاهز ✅ حرّك الروبوت ثم اضغط", "on");
+  // نسخة روبوت قديمة بلا علامات: جهّز اللوحة من السجل مباشرة
+  if (!sawMarkers && /# --- نهاية المسار ---|from pybricks/.test(shown)) fillFromLog();
+  updateDiag();
+}
+
+// إلحاق سطر واحد (أو أكثر) بلا إعادة بناء نص السجل كاملًا، مع سقف للأسطر.
+function appendToLog(text) {
+  const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 40;
+  logEl.appendChild(document.createTextNode(text));
+  logLines += (text.match(/\n/g) || []).length;
+  if (logLines > LOG_MAX_LINES) trimLog();
+  if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+}
+function trimLog() {
+  // نحذف أقدم ربع من الأسطر ونضع علامة واضحة على القصّ
+  const keep = Math.floor(LOG_MAX_LINES * 0.75);
+  const nodes = [...logEl.childNodes];
+  let total = logLines;
+  while (nodes.length && total > keep) {
+    const node = nodes.shift();
+    total -= (node.textContent.match(/\n/g) || []).length;
+    logTrimmed += (node.textContent.match(/\n/g) || []).length;
+    node.remove();
+  }
+  logLines = total;
+  const note = document.createTextNode("# … قُصّت " + logTrimmed + " سطرًا قديمًا من السجل (الحد " + LOG_MAX_LINES + ") …\n");
+  logEl.insertBefore(note, logEl.firstChild);
+  logLines += 1;
+}
+
+// ===== الاتصال =====
+async function connect(anyDevice) {
+  if (!navigator.bluetooth) {
+    alert("متصفحك لا يدعم Web Bluetooth.\nاستخدم Chrome على الكمبيوتر أو أندرويد.\nراجع التحذير الأصفر في أعلى الصفحة لخطوات تشغيله على الجوال.");
+    return;
+  }
+  try {
+    setStatus("جارِ اختيار الجهاز…", "busy");
+    device = anyDevice
+      ? await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: [PYBRICKS_SERVICE, NUS_SERVICE] })
+      : await navigator.bluetooth.requestDevice({ filters: [{ services: [PYBRICKS_SERVICE] }], optionalServices: [NUS_SERVICE] });
+    device.addEventListener("gattserverdisconnected", onDisconnected);
+    setStatus("جارِ الاتصال بـ " + (device.name || "الجهاز") + "…", "busy");
+    const server = await device.gatt.connect();
+
+    try { // الوضع الأساسي: خدمة Pybricks
+      const service = await server.getPrimaryService(PYBRICKS_SERVICE);
+      cmdChar = await service.getCharacteristic(PYBRICKS_CMD_EVENT);
+      await cmdChar.startNotifications();
+      attachPybricksEvents(cmdChar);
+      mode = "pybricks";
+    } catch (e) { // وضع بديل: Nordic UART
+      const service = await server.getPrimaryService(NUS_SERVICE);
+      nusRx = await service.getCharacteristic(NUS_RX);
+      const tx = await service.getCharacteristic(NUS_TX);
+      await tx.startNotifications();
+      attachNusEvents(tx);
+      mode = "nus";
+    }
+    setConnectedUI(true);
+    setTimeout(() => pingHub(true), 800);   // هل يعمل برنامج التدريب فعلًا؟
+    setStatus("متصل بـ " + (device.name || "Hub") + (mode === "nus"
+      ? " — شغّل برنامج التدريب من زر الـ Hub نفسه"
+      : " — اضغط «تشغيل برنامج التدريب» أو شغّله من الـ Hub"), "on");
+    showToast("✅ تم الاتصال بالروبوت (" + (mode === "nus" ? "NUS" : "Pybricks BLE") + ")", "ok");
+    $("btnReconnect").hidden = true;
+    requestWakeLock();
+    updateDiag();
+  } catch (e) {
+    setStatus("فشل الاتصال: " + e.message, "");
+    showToast("✗ فشل الاتصال: " + e.message
+      + " — تحقّق من: as3_app.py مُنزَّل، Pybricks Code مفصول، Chrome على localhost", "err", 8000);
+    setConnectedUI(false);
+  }
+}
+
+function onDisconnected() {
+  stopHeartbeat(true);
+  releaseWakeLock();
+  mode = null; cmdChar = null; nusRx = null;
+  setHubState(null);
+  rcStop(true); // لا نرسل x بعد قطع الاتصال
+  setConnectedUI(false);
+  setStatus("انقطع الاتصال بالروبوت", "");
+  $("btnReconnect").hidden = false;
+  showToast("⚠ انقطع الاتصال بالروبوت — اضغط «🔁 إعادة الاتصال»", "err", 6000);
+  updateDiag();
+}
+
+// ربط مستمع الإشعارات مرة واحدة لكل كائن: إعادة الاتصال قد تُعيد نفس
+// الكائن، ولو أضفنا المستمع ثانية لتكرّر كل سطر في السجل مرتين.
+let boundCmdChar = null, boundNusTx = null;
+function attachPybricksEvents(char) {
+  if (boundCmdChar === char) return;
+  if (boundCmdChar) boundCmdChar.removeEventListener("characteristicvaluechanged", onPybricksEvent);
+  boundCmdChar = char;
+  char.addEventListener("characteristicvaluechanged", onPybricksEvent);
+}
+function attachNusEvents(tx) {
+  if (boundNusTx === tx) return;
+  if (boundNusTx) boundNusTx.removeEventListener("characteristicvaluechanged", onNusEvent);
+  boundNusTx = tx;
+  tx.addEventListener("characteristicvaluechanged", onNusEvent);
+}
+function onNusEvent(ev) {
+  appendLog(decoder.decode(ev.target.value, { stream: true }));
+}
+
+function onPybricksEvent(ev) {
+  const data = new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength);
+  if (!data.length) return;
+  if (data[0] === EVENT_WRITE_STDOUT) {
+    appendLog(decoder.decode(data.subarray(1), { stream: true }));
+  } else if (data[0] === EVENT_STATUS && data.length >= 5) {
+    const flags = new DataView(data.buffer, data.byteOffset + 1, 4).getUint32(0, true);
+    const running = !!(flags & (1 << STATUS_USER_PROGRAM_RUNNING));
+    if (running) setStatus("متصل — برنامج على الروبوت يعمل الآن (انتظر APP_READY إذا كان برنامج التدريب)", "on");
+    else if (mode) setStatus("متصل — لا يعمل أي برنامج الآن. اضغط «تشغيل برنامج التدريب»", "busy");
+  }
+  // أحداث أخرى (بيانات تطبيق) نتجاهلها هنا
+}
+
+// ===== الإرسال (متسلسل حتى لا تتداخل كتابات GATT) =====
+// كانت الكتابة تبتلع كل خطأ وتُكمل كأن الإرسال نجح، فيظهر «أُرسل الكود»
+// ولو لم يصل شيء. الآن:
+//   writeRaw()  → يرفض (reject) عند الفشل، لمن يريد معرفة النتيجة
+//   sendCmd()   → للأوامر السريعة من الواجهة (لا يرمي استثناءً غير معالج)
+//   sendBytes() → للكود: يعيد المحاولة، ويُعيد true/false
+function writeRaw(bytes) {
+  const attempt = writeChain.then(async () => {
+    if (mode === "pybricks" && cmdChar) {
+      const payload = new Uint8Array(bytes.length + 1);
+      payload[0] = 6; // WRITE_STDIN
+      payload.set(bytes, 1);
+      await cmdChar.writeValueWithResponse(payload);
+    } else if (mode === "nus" && nusRx) {
+      await nusRx.writeValueWithResponse(new Uint8Array(bytes));
+    } else {
+      throw new Error("لا يوجد اتصال نشط");
+    }
+  });
+  // السلسلة تُكمل حتى لو فشلت كتابة واحدة، والمستدعي يرى الخطأ
+  writeChain = attempt.catch(() => {});
+  return attempt;
+}
+const sendCmd = ch => writeRaw([...new TextEncoder().encode(ch)])
+  .catch(e => showToast("✗ خطأ إرسال: " + e.message, "err"));
+// إرسال بايتات مع إعادة محاولة (تنفع مع BUSY من مخزن stdin على الـ Hub)
+async function sendBytes(bytes, tries) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      await writeRaw(bytes);
+      return true;
+    } catch (e) {
+      attempt += 1;
+      if (attempt >= (tries || 3)) return false;
+      await new Promise(r => setTimeout(r, 60 * attempt));
+    }
+  }
+}
+const sendHubCommand = code => { // أوامر Pybricks المباشرة (بدون 0x06)
+  writeChain = writeChain.then(() => cmdChar && cmdChar.writeValueWithResponse(new Uint8Array([code])))
+    .catch(e => showToast("✗ خطأ: " + e.message, "err"));
+  return writeChain;
+};
+
+// ===== تغذية راجعة: تنبيه مؤقّت عند الضغط (السجل يبقى لبيانات الروبوت) =====
+const CMD_LABELS = {
+  R: "تسجيل حركة (دوران + مستقيم + محرك D)",
+  L: "قراءة الحسّاس (لحساب عتبة الخط — حسّاس الألوان على C)",
+  F: "نقطة خط ذكية find_line",
+  T: "متابعة خط follow_line",
+  U: "تراجع — حذف آخر تسجيل",
+  C: "طباعة برنامج السباق"
+};
+function sendAndShow(ch) {
+  if (!mode) {
+    showToast("✗ «" + (CMD_LABELS[ch] || ch) + "» — غير متصل بالروبوت، لم يُرسل شيء."
+      + " اضغط «🔵 اتصال بالبلوتوث» واختر الـ Hub أولًا.", "err");
+    return null;
+  }
+  if (rcActive !== null) rcStop(true); // أي أمر تدريب يوقف الدفع عن بعد فورًا
+  showToast("⏳ " + (CMD_LABELS[ch] || ch));
+  const sent = sendCmd(ch);
+  // إن كان الـ Hub قد كُشف سابقًا كغير مستجيب، نقول ذلك صريحًا بدل الصمت
+  if (hubAlive === false) {
+    showToast("⚠ أُرسل «" + (CMD_LABELS[ch] || ch) + "» لكن الـ Hub لا يستجيب —"
+      + " شغّل as3_app.py v6 عليه («▶ تشغيل برنامج التدريب»)", "err", 7000);
+  } else if (hubAlive === null) {
+    setTimeout(() => pingHub(true), 600);          // فحص صامت في الخلفية
+  }
+  return sent;
+}
+
+// ===== التحكم عن بعد: اضغط مع الاستمرار (أو نقرة سريعة) =====
+const RC = { // أحرف التحكم التي يتوقعها as3_app.py
+  fwd: "w", back: "s", left: "a", right: "d", armUp: "u", armDown: "j", stop: "x"
+};
+const RC_LABELS = {
+  w: "دفع للأمام", s: "دفع للخلف", a: "لف يسارًا", d: "لف يمينًا",
+  u: "تحريك محرك D (+)", j: "تحريك محرك D (−)", x: "إيقاف + حرر المحركات"
+};
+const RC_KEEPALIVE_MS = 250; // نُعيد الأمر أثناء الاستمرار؛ الروبوت يتوقف تلقائيًا إذا انقطع
+const RC_MIN_HOLD_MS = 180;  // الحد الأدنى لنبضة النقر السريع قبل إرسال x حتى يدور المحرك فعليًا
+let rcActive = null, rcTimer = null, rcStartTime = 0, rcStopDelayTimer = null;
+
+function rcStart(ch, btn) {
+  if (rcStopDelayTimer) { clearTimeout(rcStopDelayTimer); rcStopDelayTimer = null; }
+  if (rcActive === ch) return;
+  rcStop(true, true); // إن كان زر آخر مضغوطًا نوقفه فورًا
+  if (!mode) {
+    showToast("✗ «" + RC_LABELS[ch] + "» غير متاح — غير متصل بالروبوت."
+      + " اضغط «🔵 اتصال بالبلوتوث» واختر الـ Hub أولًا.", "err");
+    return;
+  }
+  if ((ch === RC.armUp || ch === RC.armDown) && hubVersion && Number(hubVersion) > 0 && Number(hubVersion) < 7) {
+    showToast("⚠ كود الـ Hub الحالي (v" + hubVersion + ") قديم ولا يعرف أوامر محرك المنفذ D —"
+      + " اضغط «📋 نسخ كود الروبوت المحدّث (as3_app.py v7)» في الأعلى وارفعه إلى الـ Hub عبر Pybricks Code.", "err", 8000);
+  }
+  rcActive = ch;
+  rcStartTime = Date.now();
+  if (btn) btn.classList.add("active");
+  sendCmd(ch);
+  showToast("🎮 " + RC_LABELS[ch] + " — أفلت الزر للإيقاف");
+  rcTimer = setInterval(() => sendCmd(ch), RC_KEEPALIVE_MS);
+}
+function rcStop(quiet, immediate) {
+  if (rcTimer) { clearInterval(rcTimer); rcTimer = null; }
+  if (rcStopDelayTimer) { clearTimeout(rcStopDelayTimer); rcStopDelayTimer = null; }
+  if (rcActive === null) {
+    document.querySelectorAll(".rc.active").forEach(b => b.classList.remove("active"));
+    return;
+  }
+  const elapsed = Date.now() - rcStartTime;
+  if (!immediate && mode && elapsed < RC_MIN_HOLD_MS) {
+    // نقرة سريعة على الزر أو لوحة المفاتيح: نترك المحرك يكمل نبضة قصيرة (180ms) بدل إيقافه في 0ms
+    const waitMs = RC_MIN_HOLD_MS - elapsed;
+    rcStopDelayTimer = setTimeout(() => {
+      rcStopDelayTimer = null;
+      document.querySelectorAll(".rc.active").forEach(b => b.classList.remove("active"));
+      if (rcActive !== null) {
+        rcActive = null;
+        if (mode) sendCmd(RC.stop);
+        if (!quiet) showToast("⏹ توقف الحركة عن بعد");
+      }
+    }, waitMs);
+    return;
+  }
+  document.querySelectorAll(".rc.active").forEach(b => b.classList.remove("active"));
+  rcActive = null;
+  if (mode) sendCmd(RC.stop);   // لا نرسل بعد قطع الاتصال (لا معنى ولن يصل)
+  if (!quiet) showToast("⏹ توقف الحركة عن بعد");
+}
+const RC_HOLD = [
+  ["rcFwd", RC.fwd], ["rcBack", RC.back], ["rcLeft", RC.left], ["rcRight", RC.right],
+  ["rcArmUp", RC.armUp], ["rcArmDown", RC.armDown]
+];
+RC_HOLD.forEach(([id, ch]) => {
+  const btn = $(id);
+  btn.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {} // قد يرمي استثناء على بعض الأجهزة
+    rcStart(ch, btn);
+  });
+  btn.addEventListener("pointerup", () => rcStop());
+  btn.addEventListener("pointercancel", () => rcStop());
+  btn.addEventListener("lostpointercapture", () => rcStop());
+  btn.addEventListener("contextmenu", e => e.preventDefault());
+  btn.addEventListener("click", e => e.preventDefault()); // منع التفعيل بلوحة/اللمس المزدوج
+  // من يستخدم لوحة المفاتيح فقط: Enter على الزر المركّز = استمرار بالتحرك،
+  // ورفعه = توقف. (مفتاح المسافة محجوز للإيقاف العام في أي مكان.)
+  btn.addEventListener("keydown", e => {
+    if (e.code === "Enter") { e.preventDefault(); rcStart(ch, btn); }
+  });
+  btn.addEventListener("keyup", e => { if (e.code === "Enter") rcStop(); });
+});
+$("rcStop").addEventListener("click", () => rcStop(false, true));
+$("rcStop").addEventListener("pointerdown", e => { e.preventDefault(); $("rcStop").classList.add("active"); rcStop(false, true); });
+
+// قراءة الحساسات تلقائيًا: y = تشغيل، z = إيقاف
+$("chkAutoRead").addEventListener("change", e => {
+  const on = e.target.checked;
+  if (!mode) {
+    e.target.checked = !on;
+    showToast("✗ غير متصل — لا يمكن تغيير القراءة التلقائية الآن", "err");
+    return;
+  }
+  sendCmd(on ? "y" : "z");
+  showToast(on ? "📡 القراءة التلقائية للحسّاس: مفعّلة" : "📡 القراءة التلقائية: متوقفة");
+});
+
+// ===== التسجيل التلقائي الذكي للمسار بدون أزرار (WRO 2026) =====
+function onTelemetryAutoRecord(d, h, c) {
+  const badge = $("autoRecBadge");
+  const autoOn = !$("chkAutoRecord") || $("chkAutoRecord").checked;
+  if (!autoOn) return;
+  if (badge) {
+    badge.textContent = "— 🏃 جاري التحرك… توقف 0.6 ثانية لحفظ النقطة";
+    badge.style.color = "#fde68a";
+  }
+}
+
+if ($("chkAutoRecord")) {
+  $("chkAutoRecord").addEventListener("change", e => {
+    const on = e.target.checked;
+    const badge = $("autoRecBadge");
+    if (badge) {
+      badge.textContent = on ? "— نشط وجاهز (لمبة الـ Hub خضراء)" : "— متوقف مؤقتًا (آمن لنقل الروبوت)";
+      badge.style.color = on ? "#86efac" : "var(--muted)";
+    }
+    if (mode) sendCmd(on ? "m" : "n");
+    showToast(on
+      ? "🟢 التسجيل التلقائي مفعّل — حرّك الروبوت وتوقف 0.6 ثانية لحفظ كل خطوة"
+      : "⏸️ التسجيل التلقائي متوقف — يمكنك الآن حمل الروبوت وإرجاعه إلى START بأمان");
+  });
+}
+if ($("chkSnap90")) {
+  $("chkSnap90").addEventListener("change", e => {
+    const on = e.target.checked;
+    if (mode) sendCmd(on ? "g" : "h");
+    if (liveCmds.length) refreshLiveProgramPreview();
+    showToast(on ? "📐 تثبيت الزوايا القائمة 90°: مفعّل" : "📐 تثبيت الزوايا القائمة 90°: متوقف");
+  });
+}
+if ($("chkAutoLine")) {
+  $("chkAutoLine").addEventListener("change", e => {
+    const on = e.target.checked;
+    if (mode) sendCmd(on ? "i" : "o");
+    showToast(on ? "🎯 الاكتشاف التلقائي للخط الأسود: مفعّل" : "🎯 الاكتشاف التلقائي للخط الأسود: متوقف");
+  });
+}
+if ($("btnClearPath")) {
+  $("btnClearPath").addEventListener("click", () => {
+    recorded = 0;
+    liveCmds.length = 0;
+    allowFill = true;
+    countEl.textContent = "0";
+    if ($("chkAutoRecord")) $("chkAutoRecord").checked = true;
+    if ($("autoRecBadge")) {
+      $("autoRecBadge").textContent = "— 🟢 نشط وجاهز من مربع START";
+      $("autoRecBadge").style.color = "#86efac";
+    }
+    refreshLiveProgramPreview();
+    if (mode) {
+      sendCmd("0");
+      showToast("🟢 تم بدء مسار تلقائي جديد من START — حرّك الروبوت وتوقف 0.6 ثانية عند كل محطة", "ok", 4000);
+    } else {
+      showToast("🗑️ تم تصفير المسار في التطبيق — اتصل بالروبوت للبدء", "ok", 2500);
+    }
+  });
+}
+if ($("btnFinishAutoPath")) {
+  $("btnFinishAutoPath").addEventListener("click", () => {
+    if ($("chkAutoRecord")) $("chkAutoRecord").checked = false;
+    if ($("autoRecBadge")) {
+      $("autoRecBadge").textContent = "— ⏹ اكتمل التسجيل (آمن لحمل الروبوت إلى START)";
+      $("autoRecBadge").style.color = "#93c5fd";
+    }
+    if (mode) {
+      sendCmd("n");
+      setTimeout(() => { if (mode) sendCmd("C"); }, 120);
+      showToast("✅ تم إيقاف التسجيل التلقائي وتثبيت الكود — يمكنك الآن إرجاع الروبوت إلى START وتشغيله!", "ok", 5000);
+    } else {
+      refreshLiveProgramPreview();
+      showToast("✅ تم تثبيت الكود في اللوحة السفلية", "ok", 3000);
+    }
+  });
+}
+
+const RC_BTN_BY_CH = {
+  [RC.fwd]: "rcFwd", [RC.back]: "rcBack", [RC.left]: "rcLeft", [RC.right]: "rcRight",
+  [RC.armUp]: "rcArmUp", [RC.armDown]: "rcArmDown"
+};
+// المفاتيح تُقرأ من e.code (المفتاح الفيزيائي على اللوحة) لا من e.key،
+// حتى تعمل مع أي تخطيط: عربي / إنجليزي / أزرار القلم كلها بمكانها الفيزيائي.
+const RC_CODE = {
+  ArrowUp: RC.fwd, KeyW: RC.fwd,
+  ArrowDown: RC.back, KeyS: RC.back,
+  ArrowLeft: RC.left, KeyA: RC.left,
+  ArrowRight: RC.right, KeyD: RC.right,
+  KeyQ: RC.armUp, Equal: RC.armUp, NumpadAdd: RC.armUp, PageUp: RC.armUp,
+  KeyE: RC.armDown, KeyJ: RC.armDown, Minus: RC.armDown, NumpadSubtract: RC.armDown, PageDown: RC.armDown
+};
+const TRAIN_CODE = { KeyR: "R", KeyL: "L", KeyF: "F", KeyT: "T", KeyU: "U", KeyC: "C" };
+const isTyping = t => t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+
+document.addEventListener("keydown", e => {
+  if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
+
+  // أسهم التحكم عن بعد + WASD (ما دام ليس داخل حقل كتابة)
+  if (!isTyping(e.target)) {
+    const ch = RC_CODE[e.code];
+    if (ch) { e.preventDefault(); rcStart(ch, $(RC_BTN_BY_CH[ch])); return; }
+  }
+  // مفتاح المسافة = إيقاف فوري (للأمان يبقى متاحًا حتى مع حقل مفتوح،
+  // لكنه لا يمنع الكتابة داخله)
+  if (e.code === "Space") {
+    // داخل حقل كتابة: المسافة حرف عادي — لا تُرسل «x» للروبوت مع كل فراغ
+    if (isTyping(e.target)) return;
+    e.preventDefault();
+    rcStop(false, true);
+    return;
+  }
+  // أوامر التدريب: R L F T U C
+  if (isTyping(e.target)) return;
+  const cmd = TRAIN_CODE[e.code];
+  if (cmd) { e.preventDefault(); sendAndShow(cmd); }
+});
+document.addEventListener("keyup", e => {
+  const ch = RC_CODE[e.code];
+  if (ch && rcActive === ch) rcStop();
+});
+// أمان: نوقف كل شيء إذا خرجت النافذة أو اختفى الاتصال
+window.addEventListener("blur", () => rcStop(true, true));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) rcStop(true, true);
+  else requestWakeLock();     // المتصفح يحرّر القفل عند إخفاء الصفحة
+});
+// ===== نسخ / تنزيل كود التدريب المحدّث (as3_app.py v7) لرفعه إلى الـ Hub =====
+async function fetchHubScript() {
+  try {
+    const res = await fetch("../as3_app.py?v=" + Date.now(), { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return await res.text();
+  } catch (e) {
+    showToast("✗ تعذّر جلب ملف as3_app.py (" + e.message + ")", "err", 6000);
+    return null;
+  }
+}
+if ($("btnCopyHubScript")) {
+  $("btnCopyHubScript").onclick = async () => {
+    const code = await fetchHubScript();
+    if (!code) return;
+    copyText(code, "✅ تم نسخ كود as3_app.py (v9) — افتح code.pybricks.com والصقه وشغّله على الـ Hub مرة واحدة!");
+  };
+}
+if ($("btnDownloadHubScript")) {
+  $("btnDownloadHubScript").onclick = async () => {
+    const code = await fetchHubScript();
+    if (!code) return;
+    downloadText("as3_app.py", code, "text/x-python");
+    showToast("⬇️ تم تنزيل as3_app.py (v9) — ارفعه إلى الـ Hub عبر code.pybricks.com", "ok", 5000);
+  };
+}
+// ===== ربط الواجهة =====
+$("btnConnect").onclick = () => connect(false);
+$("btnConnectAny").onclick = () => connect(true);
+$("btnDisconnect").onclick = () => device && device.gatt.connected && device.gatt.disconnect();
+$("btnReconnect").onclick = () => reconnect();
+$("btnStart").onclick = () => {
+  sendHubCommand(CMD_START_PROGRAM);
+  showToast("▶ أُرسل أمر تشغيل برنامج التدريب — انتظر APP_READY من الروبوت", "", 3500);
+  updateDiag();
+  // التحقق من أن البرنامج بدأ فعلًا: إن لم يرد، نُخبر المستخدم بالسبب
+  setHubState(null);
+  setTimeout(() => pingHub(false), 1500);
+};
+$("btnStop").onclick = () => { rcStop(true); sendHubCommand(CMD_STOP_PROGRAM); showToast("⏹ أُرسل أمر إيقاف البرنامج"); updateDiag(); };
+
+// أزرار التدريب: النقر عليها أو المفاتيح R L F T U C (انظر مستمع keydown أعلاه)
+trainButtons.forEach(btn => btn.addEventListener("click", () => {
+  const r = sendAndShow(btn.dataset.cmd);
+  btn.classList.add("sent");
+  setTimeout(() => btn.classList.remove("sent"), 350);
+  if (r && navigator.vibrate) navigator.vibrate(30);
+}));
+
+// ===== أدوات التصدير: نسخ / تنزيل =====
+function fileStamp() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "_" + p(d.getHours()) + p(d.getMinutes());
+}
+function downloadText(name, text, mime) {
+  const blob = new Blob([text], { type: (mime || "text/plain") + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  showToast("⬇️ نُزّل الملف: " + name, "ok", 3500);
+}
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;top:-2000px;left:0;width:1px;height:1px;opacity:0";
+  document.body.appendChild(ta);
+  ta.focus(); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+  ta.remove();
+  return ok;
+}
+async function copyText(text, okMsg) {
+  if (!text || !text.trim()) { showToast("✗ لا يوجد نص للنسخ بعد", "err"); return false; }
+  try { await navigator.clipboard.writeText(text); showToast(okMsg, "ok"); return true; }
+  catch (_) { /* المتصفح رفض الوصول للحافظة — نجرّب الطريقة القديمة */ }
+  if (fallbackCopy(text)) { showToast(okMsg, "ok"); return true; }
+  showToast("✗ تعذّر النسخ التلقائي — حدّد النص في اللوحة واضغط Ctrl+C", "err", 6000);
+  return false;
+}
+// البرنامج: من علامات الروبوت، أو استخراج احتياطي من السجل (نسخة روبوت قديمة)
+function extractProgram() {
+  return programText || logProgram();
+}
+
+// ===== إرسال الكود إلى الروبوت =====
+// نحوّل سطور برنامج السباق إلى أوامر قصيرة يفهمها as3_app.py:
+//   T زاوية | S مسافة | F اتجاه مسافة | A سرعة | L مسافة جهة
+// تُرسل بعد حرف K وتنتهي بحرف E، ثم G لبدء التنفيذ على الـ Hub.
+const progNum = s => Number(String(s).trim());
+function progArgs(list) {
+  // يتجاهل أسماء المعاملات: follow_line(400, side="L") → ["400", "\"L\""]
+  return String(list).split(",").map(a => {
+    const i = a.indexOf("=");
+    return (i >= 0 ? a.slice(i + 1) : a).trim();
+  }).filter(a => a.length);
+}
+function progSide(v) {
+  const s = String(v || "L").replace(/["']/g, "").trim().toUpperCase();
+  return s.charAt(0) === "R" ? "R" : "L";
+}
+// ===== تحويل البرنامج إلى أوامر الـ Hub =====
+// أرقام عربية/فارسية ← لاتينية: لوحة المفاتيح العربية على الجوال تُنتج «٩٠»
+// بدل «90»، وكان ذلك يجعل البرنامج كله «غير قابل للإرسال» بلا سبب واضح.
+const EAST_DIGITS = /[\u0660-\u0669\u06F0-\u06F9]/g;
+function normalizeDigits(text) {
+  return String(text == null ? "" : text)
+    .replace(EAST_DIGITS, ch => {
+      const c = ch.charCodeAt(0);
+      return String(c >= 0x06F0 ? c - 0x06F0 : c - 0x0660);
+    })
+    .replace(/\u066B/g, ".")      // الفاصلة العشرية العربية
+    .replace(/\u066C/g, " ");     // فاصل الآلاف
+}
+
+// يحلّل سطرًا واحدًا ويضيف الأمر إلى out (أو يُسجّل السطر في skipped).
+// يعيد true إذا بدا السطر أمرًا معروفًا — حتى لو رُفضت قيمته.
+function parseStatement(t, out, skipped) {
+  let m;
+  if ((m = t.match(/^robot\.turn\(\s*([^)]*)\)$/))) {
+    const v = progNum(m[1]);
+    if (Number.isFinite(v)) out.push("T " + Math.round(v)); else skipped.push(t);
+    return true;
+  }
+  if ((m = t.match(/^robot\.straight\(\s*([^)]*)\)$/))) {
+    const v = progNum(m[1]);
+    if (Number.isFinite(v)) out.push("S " + Math.round(v)); else skipped.push(t);
+    return true;
+  }
+  if ((m = t.match(/^arm_motor\.run_angle\(\s*([^)]*)\)$/))) {
+    const a = progArgs(m[1]);
+    const ang = a.length >= 2 ? progNum(a[1]) : (a.length === 1 ? progNum(a[0]) : NaN);
+    const spd = a.length >= 2 ? progNum(a[0]) : 300;
+    if (Number.isFinite(ang) && Number.isFinite(spd)) out.push("M " + Math.round(ang));
+    else skipped.push(t);
+    return true;
+  }
+  if ((m = t.match(/^find_line\(\s*([^)]*)\)$/))) {
+    const a = progArgs(m[1]);
+    const dir = a.length ? (progNum(a[0]) < 0 ? -1 : 1) : 1;
+    const dist = a.length > 1 ? progNum(a[1]) : 250;
+    if (Number.isFinite(dist)) out.push("F " + dir + " " + Math.round(dist));
+    else skipped.push(t);
+    return true;
+  }
+  if ((m = t.match(/^align_on_line\(\s*([^)]*)\)$/))) {
+    const a = progArgs(m[1]);
+    const speed = a.length ? progNum(a[0]) : 25;
+    if (Number.isFinite(speed)) out.push("A " + Math.round(speed));
+    else skipped.push(t);
+    return true;
+  }
+  if ((m = t.match(/^follow_line\(\s*([^)]*)\)$/))) {
+    const a = progArgs(m[1]);
+    if (a.length && Number.isFinite(progNum(a[0]))) {
+      // الإشارة محفوظة: المسافة السالبة = متابعة الخط أثناء الرجوع
+      out.push("L " + Math.round(progNum(a[0])) + " " + progSide(a[1]));
+    } else {
+      skipped.push(t);
+    }
+    return true;
+  }
+  // سطر يبدأ كأمر معروف لكنه غير مكتمل (قوس ناقص…) أو أمر غير مدعوم
+  if (/^(robot\.|arm_motor\.|find_line\s*\(|align_on_line\s*\(|follow_line\s*\()/.test(t)
+      && !/^robot\.(reset|use_gyro|settings)\(/.test(t)) {
+    skipped.push(t);
+    return true;
+  }
+  return false;
+}
+
+// يمسح البرنامج سطرًا سطرًا:
+//   strict = true  → أوامر دالة run() فقط (السلوك الأصلي)
+//   strict = false → أي أمر خارج أجسام الدوال المساعدة (خطة بديلة عند فشل الأولى)
+function scanProgram(src, strict) {
+  const lines = [], skipped = [], seen = [];
+  let inRun = false, sawRun = false, helperIndent = null;
+  for (const raw of src.split("\n")) {
+    const code = raw.split("#")[0];
+    if (!code.trim()) continue;
+    const indent = code.length - code.replace(/^\s+/, "").length;
+    // جسم دالة مساعدة (find_line / align_on_line / follow_line): ليست أوامر مسار
+    if (helperIndent !== null) {
+      if (indent > helperIndent) continue;
+      helperIndent = null;
+    }
+    // أوامر متعددة في سطر واحد: robot.turn(90); robot.straight(200)
+    for (const piece of code.split(";")) {
+      const t = piece.trim();
+      if (!t) continue;
+      const defM = /^def\s+([A-Za-z_]\w*)\s*\(/.exec(t);
+      if (defM) {
+        const isRun = defM[1] === "run";
+        inRun = isRun;
+        if (isRun) sawRun = true; else helperIndent = indent;
+        continue;
+      }
+      if (strict) {
+        if (inRun && indent === 0) inRun = false;   // خرجنا من run()
+        if (sawRun && !inRun) continue;             // تعريفات واستدعاءات خارج المسار
+      }
+      const before = lines.length;
+      parseStatement(t, lines, skipped);
+      if (strict && lines.length === before
+          && /^(robot|arm_motor|find_line|align_on_line|follow_line)/.test(t)) {
+        seen.push(t);
+      }
+    }
+  }
+  return { lines, skipped, seen };
+}
+
+function programToRobotLines(text) {
+  const raw = String(text == null ? "" : text);
+  const src = normalizeDigits(raw);
+  const converted = src !== raw;          // هل كانت الأرقام عربية؟
+  const strict = scanProgram(src, true);
+  if (strict.lines.length) {
+    return { lines: strict.lines, skipped: strict.skipped, digitsConverted: converted };
+  }
+  // خطة بديلة: برنامج بلا run() أو run() فقد مسافاته البادئة (نسخ ولصق من محادثة)
+  const lenient = scanProgram(src, false);
+  if (lenient.lines.length) {
+    return { lines: lenient.lines, skipped: lenient.skipped, digitsConverted: converted };
+  }
+  return {
+    lines: [],
+    skipped: lenient.skipped.length ? lenient.skipped : strict.skipped,
+    seen: lenient.seen,
+    loose: true,
+    digitsConverted: converted,
+  };
+}
+
+// عتاة الخط المكتوبة في اللوحة (LINE_THRESHOLD = 49) — تُرسل للـ Hub بـ H
+// حتى ينفّذ نفس عتبة الكود المعروض بدل عتبة الـ Hub المحفوظة.
+function programThreshold(text) {
+  const m = String(text).match(/^\s*LINE_THRESHOLD\s*=\s*(\d+)/m);
+  if (!m) return null;
+  const v = Number(m[1]);
+  return Number.isFinite(v) ? v : null;
+}
+
+function setSendBusy(on) {
+  $("btnSendRun").disabled = on || !mode;
+  $("btnSendOnly").disabled = on || !mode;
+  // المحرّر يستخدم النقل نفسه: نعطّل أزراره كي لا يتداخل إرسالان
+  ["btnEditorSend", "btnEditorSendOnly"].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = on || !mode;
+  });
+  $("btnSendRun").textContent = on ? "⏳ جارٍ إرسال الكود…" : "📤 إرسال الكود وتشغيله على الروبوت";
+}
+
+// صندوق بريد لآخر أسطر الـ Hub — ننتظر به التأكيدات بلا الاعتماد على نص السجل
+const inbox = [];      // آخر أسطر الـ Hub: {seq, line}
+let inboxSeq = 0;
+function pushInbox(line) {
+  inbox.push({ seq: inboxSeq++, line });
+  if (inbox.length > 400) inbox.splice(0, 100);     // حلقة محدودة الذاكرة
+}
+// fromSeq: نقطة البداية في صندوق الرسائل. تمريرها إلزامي عند انتظار ردٍّ قد
+// يصل *أثناء* الإرسال (تأكيد E يصل قبل انتهاء آخر كتابة BLE)، وإلا فاتنا.
+function waitForLine(re, timeoutMs, fromSeq) {
+  const from = (fromSeq === undefined || fromSeq === null) ? inboxSeq : fromSeq;
+  return new Promise(resolve => {
+    const started = performance.now();
+    const tick = () => {
+      for (const item of inbox) {
+        if (item.seq < from) continue;
+        const m = String(item.line).match(re);
+        if (m) return resolve(m);
+      }
+      if (performance.now() - started > timeoutMs) return resolve(null);
+      setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
+
+// نبضة حياة أثناء تنفيذ الكود: الـ Hub يوقف الروبوت خلال 2.5 ثانية إن توقفت
+// (انقطاع بلوتوث، إغلاق التبويب، تعليق المتصفح) — انظر HEARTBEAT_MS في as3_app.py
+let beatTimer = null;
+function startHeartbeat() {
+  stopHeartbeat(true);
+  sendCmd("p");
+  beatTimer = setInterval(() => sendCmd("p"), 1000);
+}
+function stopHeartbeat(quiet) {
+  if (beatTimer) { clearInterval(beatTimer); beatTimer = null; }
+  if (!quiet && mode) sendCmd("q");
+}
+
+// إرسال الكود: B + حزم N (بايتان طول + بيانات) + E + H + G
+// كان الإرسال حرفًا حرفًا (~900 كتابة GATT لبرنامج من 100 أمر ≈ 15–25 ثانية)،
+// والآن ~15–30 حزمة في أقل من ثانية. الـ Hub يجمّع الحزم بنفسه.
+const FRAME_MAX = 90;            // أقل من حدّ خاصية BLE (100 بايت)
+
+// بناء حزم N من نص الأوامر: [N][len lo][len hi][حمولة]
+// دالة نقية (بلا بلوتوث) حتى تُختبر بسهولة — انظر tests/web.test.mjs
+function buildFrames(text, size) {
+  const bytes = new TextEncoder().encode(text);
+  const max = size || FRAME_MAX;
+  const frames = [];
+  for (let i = 0; i < bytes.length; i += max) {
+    const chunk = bytes.subarray(i, i + max);
+    const frame = new Uint8Array(chunk.length + 3);
+    frame[0] = "N".charCodeAt(0);
+    frame[1] = chunk.length & 0xFF;         // الطول little-endian
+    frame[2] = (chunk.length >> 8) & 0xFF;
+    frame.set(chunk, 3);
+    frames.push(frame);
+  }
+  return frames;
+}
+
+async function sendBulkProgram(lines, threshold) {
+  const text = lines.map(l => l + "\n").join("");
+  if (!await sendBytes(new TextEncoder().encode("B"))) return "تعذّر بدء الإرسال";
+  const frames = buildFrames(text);
+  for (let i = 0; i < frames.length; i++) {
+    if (!await sendBytes(frames[i])) return "انقطع الإرسال عند الحزمة " + (i + 1) + " من " + frames.length;
+  }
+  if (!await sendBytes(new TextEncoder().encode("E"))) return "تعذّر إغلاق الإرسال";
+  // العتبة قبل التنفيذ: نفس الرقم المكتوب في اللوحة
+  if (threshold !== null) {
+    if (!await sendBytes(new TextEncoder().encode("H " + threshold + "\n"))) return "تعذّر إرسال عتاة الخط";
+  }
+  return null;
+}
+
+// ===== استوديو البرمجة: دوال نقية (تُختبر في tests/web.test.mjs) =====
+const PY_MAX_LINES = 90;      // نفس RUN_MAX_LINES على الـ Hub
+
+// فحص توازن الأقواس والاقتباسات بأداة صغيرة تفهم تعليقات Python — بلا Python حقيقي.
+// الهدف: منع إرسال نصف برنامج والادّعاء بأنه سليم.
+function scanPython(text) {
+  const issues = [];
+  const stack = [];
+  const src = String(text == null ? "" : text);
+  let quote = null, quoteLine = 0, line = 1;
+  const closers = { ")": "(", "]": "[", "}": "{" };
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "\n") {
+      if (quote) issues.push("سطر " + quoteLine + ": نص لم يُغلق (" + quote + ")");
+      quote = null;
+      line += 1;
+      continue;
+    }
+    if (quote) {
+      if (ch === "\\") { i += 1; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "#") {
+      while (i + 1 < src.length && src[i + 1] !== "\n") i += 1;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; quoteLine = line; continue; }
+    if (ch === "(" || ch === "[" || ch === "{") { stack.push({ ch, line }); continue; }
+    if (closers[ch]) {
+      const open = stack.pop();
+      if (!open) issues.push("سطر " + line + ": «" + ch + "» بلا فتح مقابل");
+      else if (open.ch !== closers[ch]) issues.push("سطر " + line + ": «" + ch + "» يغلق «" + open.ch + "» المفتوح في سطر " + open.line);
+    }
+  }
+  if (quote) issues.push("سطر " + quoteLine + ": نص لم يُغلق (" + quote + ")");
+  for (const o of stack) issues.push("سطر " + o.line + ": «" + o.ch + "» لم يُغلق");
+  return issues;
+}
+
+// نتيجة الفحص: بالضبط كم أمرًا سيصل للـ Hub، وماذا سيُتجاهل — بلا نجاح كاذب.
+function checkProgram(text) {
+  const src = String(text == null ? "" : text);
+  const errors = [], warnings = [], notes = [];
+  const empty = { ok: false, errors, warnings, notes, lines: 0, skipped: [], threshold: null };
+  if (!src.trim()) { errors.push("المحرّر فارغ — لا يوجد كود"); return empty; }
+  if (src.indexOf("\t") >= 0) warnings.push("يحتوي علامات جدولة (Tab) — استخدم مسافات");
+  for (const issue of scanPython(src)) errors.push(issue);
+  const parsed = programToRobotLines(src);
+  const { lines, skipped } = parsed;
+  const threshold = programThreshold(src);
+  if (!lines.length) {
+    errors.push("لا يوجد أي أمر حركة قابل للإرسال — " + whyNoCommands(src, parsed));
+  }
+  if (parsed.digitsConverted) {
+    notes.push("حُوّلت الأرقام العربية (٩٠) إلى لاتينية (90) تلقائيًا قبل الإرسال");
+  }
+  if (lines.length > PY_MAX_LINES) {
+    errors.push("عدد الأوامر " + lines.length + " يتجاوز حدّ الـ Hub (" + PY_MAX_LINES + ")");
+  }
+  for (const line of skipped.slice(0, 6)) warnings.push("لن يُرسل (غير مدعوم على الـ Hub): " + line);
+  if (skipped.length > 6) warnings.push("و" + (skipped.length - 6) + " سطرًا آخر لن يُرسل");
+  const usesLine = lines.some(l => /^[FA]/.test(l));
+  if (threshold === null) {
+    if (usesLine) warnings.push("لا يوجد LINE_THRESHOLD في الكود — سيُستخدم 30 على الـ Hub");
+  } else if (threshold < 5 || threshold > 95) {
+    warnings.push("LINE_THRESHOLD = " + threshold + " خارج المدى (5–95) — سيُقيَّد تلقائيًا");
+  }
+  if (/^\s*(import|from)\s+(numpy|pandas|requests|socket|threading|tkinter|matplotlib)\b/m.test(src)) {
+    warnings.push("يستورد وحدة قد لا تتوفّر في Pybricks — افحصها في Pybricks Code أولًا");
+  }
+  if (/^\s*(if|for|while|try|with)\b/m.test(src)) {
+    notes.push("يحتوي منطقًا (if/for/while) — يبقى في الملف لـ Pybricks Code ولا يُرسَل إلى الـ Hub");
+  }
+  return { ok: errors.length === 0, errors, warnings, notes, lines: lines.length, skipped, threshold };
+}
+
+// ===== مكتبة البرامج: تحويل البيانات (دوال نقية) =====
+const LIB_MAX = 40;
+const PROG_NAME_MAX = 20;   // نفس PROG_NAME_MAX في as3_app.py
+
+function libNormalize(list) {
+  const out = [];
+  if (!Array.isArray(list)) return out;
+  for (const item of list) {
+    if (!item || typeof item !== "object") continue;
+    const name = String(item.name == null ? "" : item.name).trim().slice(0, 40);
+    const code = String(item.code == null ? "" : item.code);
+    if (!name || !code.trim()) continue;
+    out.push({ name, code, updated: Number(item.updated) || 0 });
+    if (out.length >= LIB_MAX) break;
+  }
+  return out;
+}
+// إضافة/تحديث باسم واحد (الاسم نفسه = استبدال) — الأحدث أولًا
+function libUpsert(list, name, code, now) {
+  const clean = libNormalize(list);
+  const nm = String(name == null ? "" : name).trim().slice(0, 40) || "برنامج";
+  const entry = { name: nm, code: String(code == null ? "" : code), updated: Number(now) || 0 };
+  const i = clean.findIndex(x => x.name === nm);
+  if (i >= 0) clean[i] = entry;
+  else clean.unshift(entry);
+  return libNormalize(clean);
+}
+function libRemove(list, name) {
+  return libNormalize(list).filter(x => x.name !== name);
+}
+// قائمة برامج الـ Hub كما يطبعها:  # P <رقم> <عدد الأوامر> <الاسم>
+function parseHubList(lines) {
+  const out = [];
+  for (const raw of (lines || [])) {
+    const m = String(raw).match(/^# P\s+(\d+)\s+(\d+)\s+(.+?)\s*$/);
+    if (m) out.push({ index: Number(m[1]), count: Number(m[2]), name: m[3] });
+  }
+  return out;
+}
+// اسم ملف آمن من اسم عربي
+function pyFileName(name) {
+  const safe = String(name || "program").replace(/[^A-Za-z0-9\u0600-\u06FF_-]+/g, "_").slice(0, 40);
+  return (safe || "program") + ".py";
+}
+const escHtml = str => String(str).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// إرسال نص برنامج (المحرّر أو المكتبة) بدل لوحة البرنامج الجاهز
+// يشرح بالضبط لماذا لم نجد أوامر — بدل رسالة عامة لا تدلّ على شيء
+function whyNoCommands(text, parsed) {
+  const src = String(text == null ? "" : text);
+  const bits = [];
+  if (parsed.digitsConverted) {
+    bits.push("حُوّلت الأرقام العربية إلى لاتينية تلقائيًا");
+  }
+  if (parsed.skipped.length) {
+    bits.push("رأيت " + parsed.skipped.length + " سطرًا لكنها غير مدعومة: "
+      + parsed.skipped.slice(0, 3).join(" · "));
+  }
+  if (parsed.seen && parsed.seen.length) {
+    bits.push("أسطر تشبه الأوامر لكنها غير مفهومة: " + parsed.seen.slice(0, 3).join(" · "));
+  }
+  if (!parsed.skipped.length && !(parsed.seen && parsed.seen.length)) {
+    const hasRun = /^\s*def\s+run\s*\(/m.test(src);
+    const hasCmd = /(robot\.turn|robot\.straight|arm_motor\.run_angle|find_line|align_on_line|follow_line)\s*\(/.test(src);
+    if (!hasCmd) {
+      bits.push("لا يوجد أي سطر فيه robot.turn / robot.straight / arm_motor.run_angle / find_line /"
+        + " align_on_line / follow_line — اكتبها كل واحدة في سطر مستقل");
+    } else if (hasRun) {
+      bits.push("الأوامر موجودة لكن خارج دالة run() أو في جسم دالة مساعدة — ضعها بمسافة بادئة داخل run()");
+    } else if (/^\s*def\s+[A-Za-z_]\w*\s*\(/m.test(src)) {
+      bits.push("الأوامر مكتوبة داخل دالة (وليست دالة run) — انقلها إلى def run() أو اكتبها"
+        + " في أعلى الملف بلا مسافة بادئة");
+    } else {
+      bits.push("لم أستطع قراءة الأوامر — تأكد أن كل أمر في سطر مستقل مثل robot.turn(90)");
+    }
+  }
+  return bits.join(" — ");
+}
+
+async function sendProgramToRobot(runIt, text) {
+  if (!mode) {
+    showToast("✗ غير متصل بالروبوت — اضغط «🔵 اتصال بالبلوتوث» واختر الـ Hub أولًا", "err", 5000);
+    return;
+  }
+  const p = (text === undefined || text === null) ? extractProgram() : String(text);
+  if (!p || !p.trim()) {
+    showToast("✗ لا يوجد كود — اضغط «🏁 طباعة برنامج السباق الكامل» أو اكتب في المحرّر", "err", 5500);
+    return;
+  }
+  const parsed = programToRobotLines(p);
+  const { lines, skipped } = parsed;
+  if (!lines.length) {
+    showToast("✗ لم أجد أوامر قابلة للإرسال — " + whyNoCommands(p, parsed)
+      + ". (المدعوم: robot.turn / robot.straight / find_line / align_on_line / follow_line)",
+      "err", 11000);
+    return;
+  }
+  if (sendingProgram) { showToast("⏳ الإرسال جارٍ بالفعل…"); return; }
+  sendingProgram = true;
+  rcStop(true);
+  setSendBusy(true);
+  const threshold = programThreshold(p);
+  // نلتقط موضع صندوق الرسائل *قبل* الإرسال: تأكيد الـ Hub قد يصل قبل أن
+  // تنتهي كتابة آخر حزمة، فلو انتظرناه بعده فقط لفاتنا وأعلنّا فشلًا كاذبًا.
+  const ackFrom = inboxSeq;
+  try {
+    const failure = await sendBulkProgram(lines, threshold);
+    if (failure) {
+      showToast("✗ فشل إرسال الكود: " + failure + " — لم يتغيّر الكود على الروبوت", "err", 8000);
+      return;
+    }
+    // لا نعلن النجاح إلا بعد تأكيد الـ Hub نفسه
+    const ack = await waitForLine(/# ✓ استُلم الكود: (\d+)/, 5000, ackFrom);
+    if (!ack) {
+      // نميّز بين «الـ Hub ميت» و«الـ Hub حيّ لكنه رفض الكود» — التشخيص هنا
+      // يوفّر على المستخدم التخمين بدل رسالة عامة.
+      const alive = await pingHub(true);
+      const last = [...inbox].reverse().map(x => x.line)
+        .find(l => /^#\s*(⚠|✗)/.test(l));
+      if (!alive) {
+        showToast("✗ الـ Hub لا يستجيب لأوامر التطبيق — نزّل as3_app.py v6 على الـ Hub"
+          + " ثم «▶ تشغيل برنامج التدريب» (النسخة الأقدم لا تعرف الحزم N)", "err", 10000);
+      } else {
+        showToast("⚠ الـ Hub يعمل لكنه لم يؤكّد استلام الكود"
+          + (last ? " — قال: " + last.replace(/^#\s*/, "") : "")
+          + " — أعد المحاولة، وإن تكرّر راجع السجل", "err", 10000);
+      }
+      return;
+    }
+    const got = Number(ack[1]);
+    if (got !== lines.length) {
+      showToast("⚠ وصل " + got + " من " + lines.length + " أمرًا — أعد الإرسال أو راجع السجل", "err", 8000);
+      return;
+    }
+    if (runIt) {
+      await new Promise(r => setTimeout(r, 80));
+      if (!await sendBytes(new TextEncoder().encode("G"))) {
+        showToast("✗ تعذّر بدء التنفيذ", "err", 6000);
+        return;
+      }
+      startHeartbeat();                    // يراقبه الـ Hub ويوقف الروبوت إن انقطع
+    }
+    showToast("📤 أُرسل الكود وتأكّد الـ Hub (" + lines.length + " أمر"
+      + (threshold !== null ? "، عتاة الخط " + threshold : "")
+      + (skipped.length ? " — تجاهلت " + skipped.length + " سطرًا" : "") + ")"
+      + (runIt ? " — التنفيذ يبدأ الآن" : " — اضغط «📤 إرسال الكود وتشغيله» للتنفيذ"),
+      "ok", 5000);
+  } finally {
+    sendingProgram = false;
+    setSendBusy(false);
+  }
+}
+// تحويل سطور القياس # T إلى CSV.
+// الزمن حقيقي (يُسجَّل لحظة وصول السطر) بدل تقدير 0.1 ثانية لكل عينة:
+// البثّ يتوقف عند السكون، فالتقدير كان يُزيح المحور الزمني.
+function telemetryCsv() {
+  const rows = [["t_s", "d_mm", "h_deg", "C_reflect"]];
+  for (const s of telemetry) rows.push([s.t, s.d, s.h, s.C]);
+  return rows.map(r => r.join(",")).join("\n") + "\n";
+}
+
+$("btnCopyLog").onclick = () => copyText(logEl.textContent, "تم نسخ السجل كاملًا ✅");
+$("btnDownloadLog").onclick = () => {
+  if (!logEl.textContent.trim()) { showToast("✗ السجل فارغ", "err"); return; }
+  if (logTrimmed) showToast("ℹ السجل مقصوص (" + logTrimmed + " سطرًا قديمًا) — الملف يحتوي المعروض فقط", "", 6000);
+  downloadText("robot_log_" + fileStamp() + ".txt", logEl.textContent);
+};
+$("btnDownloadCsv").onclick = () => {
+  const csv = telemetryCsv();
+  if (csv.split("\n").length <= 2) { showToast("✗ لا توجد سطور قياس «# T» في السجل بعد", "err"); return; }
+  downloadText("telemetry_" + fileStamp() + ".csv", csv, "text/csv");
+};
+$("btnCopyProgram").onclick = () => {
+  const p = extractProgram();
+  if (!p) { showToast("✗ لم يصل برنامج بعد — اضغط «🏁 طباعة برنامج السباق الكامل» أولًا", "err", 5000); return; }
+  copyText(p, "تم نسخ البرنامج ✅ الصقه في Pybricks Code");
+};
+$("btnDownloadProgram").onclick = () => {
+  const p = extractProgram();
+  if (!p) { showToast("✗ لم يصل برنامج بعد — اضغط «🏁 طباعة برنامج السباق الكامل» أولًا", "err", 5000); return; }
+  downloadText("race_program.py", p, "text/x-python");
+};
+$("btnSendRun").onclick = () => sendProgramToRobot(true);
+$("btnSendOnly").onclick = () => sendProgramToRobot(false);
+$("btnStopRun").onclick = () => {
+  if (!mode) { showToast("✗ غير متصل بالروبوت", "err"); return; }
+  stopHeartbeat();
+  sendCmd("x");   // x أثناء التنفيذ = إيقاف فوري في as3_app.py
+  showToast("⏹ أُرسل أمر إيقاف التنفيذ");
+};
+// تعديل الكود يدويًا في اللوحة يصبح هو ما يُرسل إلى الروبوت
+$("progOut").addEventListener("input", e => { programText = e.target.value; allowFill = false; });
+$("btnClearProgram").onclick = () => {
+  programText = ""; allowFill = false;           // لا تُعِد الملء حتى يُطبع برنامج جديد
+  $("progOut").value = ""; $("progBadge").hidden = true; $("progNote").hidden = true;
+  showToast("تم تفريغ لوحة البرنامج");
+};
+$("btnClearLog").onclick = () => {
+  logEl.textContent = ""; logLines = 0; logTrimmed = 0;
+  telemetry.length = 0;
+  recorded = 0; countEl.textContent = 0;
+  updateDiag();
+};
+
+// ===== مزامنة الشاشة (Wake Lock) =====
+// نوم الشاشة يوقف مؤقتات الصفحة، فتتوقف نبضات التحكم ويتبلّط الروبوت.
+// نطلب عدم النوم ما دام الاتصال قائمًا، ونعيد الطلب عند رجوع الصفحة.
+let wakeLock = null;
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator) || !mode) return;
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => { wakeLock = null; });
+  } catch (_) { /* غير مدعوم أو رفضه المتصفح — لا يضر */ }
+}
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+// ===== إعادة الاتصال السريعة (بلا نافذة اختيار) =====
+async function reconnect() {
+  if (!device) { connect(false); return; }
+  try {
+    setStatus("جارِ إعادة الاتصال…", "busy");
+    // إعادة فتح الخدمة على نفس الجهاز: أسرع من نافذة الاختيار
+    const server = await device.gatt.connect();
+    try {
+      const service = await server.getPrimaryService(PYBRICKS_SERVICE);
+      cmdChar = await service.getCharacteristic(PYBRICKS_CMD_EVENT);
+      await cmdChar.startNotifications();
+      attachPybricksEvents(cmdChar);
+      mode = "pybricks";
+    } catch (e) {
+      const service = await server.getPrimaryService(NUS_SERVICE);
+      nusRx = await service.getCharacteristic(NUS_RX);
+      const tx = await service.getCharacteristic(NUS_TX);
+      await tx.startNotifications();
+      attachNusEvents(tx);
+      mode = "nus";
+    }
+    setConnectedUI(true);
+    $("btnReconnect").hidden = true;
+    setStatus("أُعيد الاتصال بـ " + (device.name || "Hub"), "on");
+    showToast("✅ أُعيد الاتصال", "ok");
+    updateDiag();
+    requestWakeLock();
+  } catch (e) {
+    setStatus("فشل إعادة الاتصال: " + e.message, "");
+    showToast("✗ فشل إعادة الاتصال — أعد الاختيار بزر «اتصال بالبلوتوث»", "err", 6000);
+  }
+}
+
+setConnectedUI(false);
+
+// كشف البيئة قبل الاتصال — Web Bluetooth يتطلب سياقًا آمنًا (https أو localhost).
+// على الجوال عبر http://10.x.x.x:8000 يُحجب رغم أن Chrome يدعمه، فنشرح الحالة بدقّة.
+const isLocalhost = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+const isFile = location.protocol === "file:";
+const isHttpPlain = location.protocol === "http:" && !isLocalhost;
+const badEnv = !navigator.bluetooth || isFile;
+
+function envHelp() {
+  const here = location.origin + "/app/";
+  if (isFile) {
+    return "⚠️ فُتحت الصفحة كملف محلي (<code>file://</code>) — البلوتوث لا يعمل من هنا إطلاقًا.<br>"
+      + "<b>على الكمبيوتر</b>: شغّل الخادم ثم افتح الرابط:<br>"
+      + "<code>python -m http.server 8000</code> ← <code>http://localhost:8000/app/</code><br>"
+      + "<b>من الجوال وحده (بلا كمبيوتر)</b>: ثبّت <b>Termux</b> ← <code>pkg install python</code> ←"
+      + " انسخ <code>index.html</code> إلى مجلده ← <code>python -m http.server 8000</code> ←"
+      + " افتح <code>http://localhost:8000/app/</code> في Chrome. الرابط المحلي سياق آمن فلا حاجة لعلامة.";
+  }
+  if (isHttpPlain) {
+    // الحالة الشائعة على الجوال: الصفحة على شبكة محلية عبر http غير آمن
+    return "⚠️ الصفحة مفتوحة عبر <code>http://</code> غير الآمن، فحجب المتصفح Web Bluetooth"
+      + " (الرابط الحالي: <code>" + here + "</code>).<br>"
+      + "<b>أندرويد / Chrome</b>: افتح <code>chrome://flags/#unsafely-treat-insecure-origin-as-secure</code> ←"
+      + " فعّله ← أضف <code>" + location.origin + "</code> في الحقل الذي يظهر ← «Relaunch» ← أعد فتح الرابط.<br>"
+      + "<b>البديل الدائم</b>: قدّم الصفحة عبر <code>https</code> (مثلًا Cloudflare Tunnel أو GitHub Pages) فلا تحتاج علامة.";
+  }
+  return "⚠️ متصفحك لا يدعم Web Bluetooth — استخدم <b>Chrome</b> على الكمبيوتر أو أندرويد"
+    + "<br>(لا يعمل على Safari أو Firefox، وعلى آيفون لا يدعمه WebKit إطلاقًا).";
+}
+
+$("hubState").style.cursor = "pointer";
+$("hubState").onclick = () => pingHub(false);
+
+updateDiag();
+
+if (badEnv) {
+  $("needHttps").innerHTML = envHelp();
+  $("needHttps").hidden = false;
+  setStatus(isFile
+    ? "فُتحت الصفحة كملف محلي (file://) — البلوتوث يتطلب https أو localhost"
+    : isHttpPlain
+      ? "الصفحة عبر http غير آمن — فعّل علامة «unsafely-treat-insecure-origin-as-secure» في Chrome"
+      : "متصفحك لا يدعم Web Bluetooth — استخدم Chrome على كمبيوتر أو أندرويد", "");
+}
+if (badEnv) showToast("⚠ البيئة الحالية لا تسمح بالبلوتوث — راجع التحذير أعلاه لخطوات الجوال", "err", 9000);
+else showToast("جاهز — اضغط «🔵 اتصال بالبلوتوث» ثم «▶ تشغيل برنامج التدريب»", "", 3500);
+updateDiag();
+</script>
+<script>
+/* تسجيل Service Worker — يتيح فتح الصفحة في الميدان حتى بلا إنترنت (PWA).
+   نتجاهل الفشل بصمت: الصفحة تعمل عاديًا إذا تعذّر التسجيل (مثلًا على file://). */
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((err) => {
+      console.warn("تعذّر تسجيل Service Worker:", err);
+    });
+  });
+}
+</script>
+</body>
+</html>

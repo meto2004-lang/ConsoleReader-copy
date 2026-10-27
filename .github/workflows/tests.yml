@@ -1,0 +1,48 @@
+name: tests
+
+on:
+  push:
+    branches: [main, master, "arena/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hub-logic:
+    name: منطق الـ Hub (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: فحص الصياغة
+        run: python -m py_compile as3.py as3_app.py tools/check_sync.py tools/dev_server.py
+      - name: تزامن as3.py مع as3_app.py
+        run: python tools/check_sync.py
+      - name: الاختبارات
+        run: python -m unittest discover -s tests -t tests -v
+
+  web-logic:
+    name: منطق التطبيق (JavaScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: الاختبارات
+        run: node --test tests/web.test.mjs
+      - name: تثبيت jsdom (لاختبار الواجهة)
+        run: npm install jsdom --no-save --no-fund --no-audit
+      - name: اختبار الواجهة في DOM محاكى
+        run: node tests/ui_smoke.mjs
+
+  service-worker:
+    name: ثبات Service Worker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: فحص صياغة sw.js
+        run: node --check app/sw.js
+      - name: manifest.json صالح
+        run: python -c "import json;json.load(open('app/manifest.json',encoding='utf-8'))"
